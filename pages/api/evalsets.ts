@@ -20,20 +20,45 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Query the models table for all active models with specific fields
-    const { data, error } = await supabase
-      .from('models')
-      .select('id, name, provider, version, max_tokens, cost_input_per_million, cost_output_per_million')
-      .eq('is_active', true)
+    // Query eval_sets with prompt count from eval_set_prompts
+    const { data: evalSets, error } = await supabase
+      .from('eval_sets')
+      .select(`
+        id,
+        name,
+        description,
+        created_at,
+        updated_at,
+        eval_set_prompts (
+          id,
+          prompt_id
+        )
+      `)
       .order('created_at', { ascending: false });
 
     if (error) {
       throw new Error(error.message);
     }
 
-    return res.status(200).json(data || []);
+    // Transform the data to include prompt count
+    const evalSetsWithCounts = (evalSets || []).map((evalSet: any) => {
+      const promptCount = Array.isArray(evalSet.eval_set_prompts)
+        ? evalSet.eval_set_prompts.length
+        : 0;
+
+      return {
+        id: evalSet.id,
+        name: evalSet.name,
+        description: evalSet.description,
+        promptCount: promptCount,
+        created_at: evalSet.created_at,
+        updated_at: evalSet.updated_at,
+      };
+    });
+
+    return res.status(200).json(evalSetsWithCounts);
   } catch (error: any) {
-    console.error('API Models Error:', error.message);
+    console.error('API EvalSets Error:', error.message);
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }

@@ -45,7 +45,11 @@ CREATE TABLE outputs (
     text TEXT NOT NULL,
     latency_ms INTEGER,
     cost DECIMAL(10, 6),
-    tokens_used INTEGER,
+    input_tokens INTEGER,
+    output_tokens INTEGER,
+    tokens_used INTEGER, -- Kept for backward compatibility, can be computed as input_tokens + output_tokens
+    error TEXT,
+    computed_score NUMERIC, -- Weighted total score from evaluation ratings
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(run_id, model_id)
 );
