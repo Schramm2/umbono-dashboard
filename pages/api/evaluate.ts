@@ -1,19 +1,14 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabase } from '../../lib/supabase';
+import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    return res.status(200).end();
-  }
+  const preflightResponse = handleCorsPreflight(req, res);
+  if (preflightResponse) return preflightResponse;
 
   // Set CORS headers for all responses
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCorsHeaders(res, req.headers.origin);
 
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -35,13 +30,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error(criteriaError?.message || 'Failed to fetch evaluation criteria.');
     }
 
-    const criteriaMap = new Map(criteria.map((c) => [c.id, c]));
+    // Create maps for both ID and name lookups (frontend may send either)
+    const criteriaMapById = new Map(criteria.map((c) => [c.id, c]));
+    const criteriaMapByName = new Map(
+      criteria.map((c) => [c.name.toLowerCase().replace(/\s+/g, '_'), c])
+    );
 
     let totalWeightedScore = 0;
     const ratingsToInsert = userRatings.map((rating: any) => {
-      const criterion = criteriaMap.get(rating.criterion_id);
+      // Try to find criterion by ID first, then by name (normalized)
+      let criterion = criteriaMapById.get(rating.criterion_id);
       if (!criterion) {
-        throw new Error(`Criterion with ID ${rating.criterion_id} not found.`);
+        // Normalize the criterion_id to match the name format (lowercase, underscores)
+        const normalizedName = rating.criterion_id.toLowerCase().replace(/\s+/g, '_');
+        criterion = criteriaMapByName.get(normalizedName);
+      }
+      
+      if (!criterion) {
+        throw new Error(`Criterion with ID/name "${rating.criterion_id}" not found. Available criteria: ${criteria.map(c => c.name).join(', ')}`);
       }
 
       let scoreValue = rating.score_value;
@@ -63,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       return {
         output_id,
-        criterion_id: rating.criterion_id,
+        criterion_id: criterion.id, // Use the actual UUID from the database
         value,
         boolean_value,
       };

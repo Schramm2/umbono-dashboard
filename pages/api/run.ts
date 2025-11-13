@@ -4,6 +4,7 @@ import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Mistral } from '@mistralai/mistralai';
+import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 // Initialize clients (ensure API keys are in .env.local)
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
@@ -13,17 +14,11 @@ const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
-  if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-    return res.status(200).end();
-  }
+  const preflightResponse = handleCorsPreflight(req, res);
+  if (preflightResponse) return preflightResponse;
 
   // Set CORS headers for all responses
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  setCorsHeaders(res, req.headers.origin);
 
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
