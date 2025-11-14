@@ -93,7 +93,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         // Check for duplicate criteria in the same request
         if (processedCriteriaIds.has(criterion.id)) {
-          console.warn(`[Evaluate] Duplicate rating for criterion "${criterion.name}" (ID: ${criterion.id}). Skipping duplicate.`);
           return false; // Filter out duplicate
         }
         processedCriteriaIds.add(criterion.id);
@@ -128,7 +127,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         }
         // Ensure score is within valid range (1-5 for sliders)
         if (scoreValue < 1 || scoreValue > 5) {
-          console.warn(`Score value ${scoreValue} for criterion "${criterion.name}" is outside valid range (1-5). Clamping to valid range.`);
           scoreValue = Math.max(1, Math.min(5, scoreValue));
         }
         value = Math.round(scoreValue); // Round to integer for database storage
@@ -155,9 +153,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const weightedContribution = scoreValue * weight;
       totalWeightedScore += weightedContribution;
 
-      // Debug logging (can be removed in production)
-      console.log(`[Evaluate] Criterion: ${criterion.name}, Score: ${scoreValue}, Weight: ${weight}, Contribution: ${weightedContribution}, Running Total: ${totalWeightedScore}`);
-
       return {
         output_id: actualOutputId, // Use the actual output UUID from the database
         criterion_id: criterion.id, // Use the actual UUID from the database
@@ -165,12 +160,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         boolean_value,
       };
     });
-
-    // Debug: Log final calculation summary
-    console.log(`[Evaluate] Final calculation summary:`);
-    console.log(`[Evaluate] Total ratings processed: ${ratingsToInsert.length}`);
-    console.log(`[Evaluate] Total weighted score: ${totalWeightedScore}`);
-    console.log(`[Evaluate] Ratings array length from frontend: ${userRatings.length}`);
 
     // Insert ratings (upsert if re-evaluating)
     const { error: insertRatingsError } = await supabase
