@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '../../lib/supabase';
+import { createSupabaseClient } from '../../lib/supabase-server';
+import { requireAuth } from '../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -14,7 +15,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  const { dateRange, modelId, tag, taskType, provider } = req.query;
+  // Require authentication for leaderboard access
+  const auth = await requireAuth(req, res);
+  if (!auth) return; // Response already sent by requireAuth
+
+  // Extract auth token and create authenticated Supabase client
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '') || authHeader;
+  const supabase = createSupabaseClient(token);
+
+  const { dateRange, modelId, tag, taskType, provider, userId } = req.query;
+  
+  // Determine which user ID to filter by
+  // If userId query param is "all" or not provided, don't filter by user (show all users)
+  // If userId is "me", filter by the authenticated user's ID
+  // Otherwise, use the provided userId to filter
+  const filterUserId = userId === 'all' || !userId 
+    ? null 
+    : userId === 'me' 
+      ? auth.user.id 
+      : userId as string;
 
   try {
     // Build base query - join outputs with models, runs, and ratings
@@ -42,7 +62,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         runs (
           id,
           created_at,
-          prompt_id
+          prompt_id,
+          user_id
         ),
         ratings (
           id,
@@ -110,6 +131,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Get run IDs that belong to the filtered user
+    // This will be used to filter outputs at the query level
+    let userFilteredRunIds: string[] | null = null;
+    if (filterUserId) {
+      const { data: userRuns, error: runsError } = await supabase
+        .from('runs')
+        .select('id')
+        .eq('user_id', filterUserId);
+
+      if (!runsError && userRuns && userRuns.length > 0) {
+        userFilteredRunIds = userRuns.map((run) => run.id);
+        // Filter outputs query by run IDs belonging to the user
+        query = query.in('run_id', userFilteredRunIds);
+      } else if (!runsError && userRuns && userRuns.length === 0) {
+        // User has no runs, return empty result early
+        return res.status(200).json([]);
+      }
+    }
+
     const { data: rawData, error } = await query;
 
     if (error) {
@@ -135,6 +175,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const modelAggregates = new Map<string, any>();
 
     rawData.forEach((output: any) => {
+      // User filter is already applied at query level, but double-check using run user_id if available
+      if (filterUserId && output.runs) {
+        const runUserId = Array.isArray(output.runs) ? output.runs[0]?.user_id : output.runs?.user_id;
+        // Additional safety check: if user_id is available in the run data, verify it matches
+        if (runUserId && runUserId !== filterUserId) {
+          return; // Skip this output if it doesn't belong to the filtered user
+        }
+      }
+
       // Apply tag/taskType filter if needed
       if (tagFilteredPromptIds && output.runs) {
         const runPromptId = Array.isArray(output.runs) ? output.runs[0]?.prompt_id : output.runs?.prompt_id;

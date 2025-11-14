@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '../../lib/supabase';
+import { createSupabaseClient } from '../../lib/supabase-server';
+import { requireAuth } from '../../lib/auth';
 import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -22,6 +23,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // GET: Fetch run by ID, list templates, or fetch template by ID
   if (req.method === 'GET') {
+    // Try to get auth token if available (optional for GET)
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || authHeader;
+    const supabase = token ? createSupabaseClient(token) : createSupabaseClient();
+    
     const { id, templates, template_id } = req.query;
 
     // List all templates (prompts with titles)
@@ -153,6 +159,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // POST: Create run or save template
   if (req.method === 'POST') {
+    // Require authentication for POST operations
+    const auth = await requireAuth(req, res);
+    if (!auth) return; // Response already sent by requireAuth
+
+    const userId = auth.user.id;
+    // Extract auth token and create authenticated Supabase client
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || authHeader;
+    const supabase = createSupabaseClient(token);
     const { action } = req.body;
 
     // Save template action
@@ -178,7 +193,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
         const { data: savedPrompt, error: promptError } = await supabase
           .from('prompts')
-          .insert(insertData)
+          .insert({ ...insertData, user_id: userId })
           .select('id, text, title, description, created_at, updated_at')
           .single();
 
@@ -218,7 +233,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       // 2. Insert prompt and run record
       const { data: insertedPrompt, error: promptError } = await supabase
         .from('prompts')
-        .insert({ text: prompt })
+        .insert({ text: prompt, user_id: userId })
         .select('id')
         .single();
 
@@ -228,7 +243,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       const { data: insertedRun, error: runError } = await supabase
         .from('runs')
-        .insert({ prompt_id: insertedPrompt.id })
+        .insert({ prompt_id: insertedPrompt.id, user_id: userId })
         .select('id')
         .single();
 

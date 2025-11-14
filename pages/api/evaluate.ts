@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '../../lib/supabase';
+import { createSupabaseClient } from '../../lib/supabase-server';
+import { requireAuth } from '../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
@@ -13,6 +14,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
+
+  // Require authentication for evaluation
+  const auth = await requireAuth(req, res);
+  if (!auth) return; // Response already sent by requireAuth
+
+  // Extract auth token and create authenticated Supabase client
+  const authHeader = req.headers.authorization;
+  const token = authHeader?.replace('Bearer ', '') || authHeader;
+  const supabase = createSupabaseClient(token);
 
   const { run_id, output_id, ratings: userRatings } = req.body;
 

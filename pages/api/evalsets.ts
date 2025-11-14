@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { supabase } from '../../lib/supabase';
+import { createSupabaseClient } from '../../lib/supabase-server';
+import { requireAuth } from '../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
@@ -25,6 +26,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // GET: List all eval sets or get specific eval set with prompts
   if (req.method === 'GET') {
+    // Require authentication for GET operations
+    const auth = await requireAuth(req, res);
+    if (!auth) return; // Response already sent by requireAuth
+
+    const userId = auth.user.id;
+    // Extract auth token and create authenticated Supabase client
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || authHeader;
+    const supabase = createSupabaseClient(token);
+
     try {
       const { id } = req.query;
 
@@ -34,6 +45,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .from('eval_sets')
           .select('id, name, description, default_models, default_parameters, created_at, updated_at, archived')
           .eq('id', id)
+          .eq('user_id', userId)
           .single();
 
         if (evalSetError || !evalSet) {
@@ -87,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return;
       }
 
-      // Otherwise, list all eval sets with prompt counts
+      // Otherwise, list all eval sets with prompt counts (user's own sets)
       const { data: evalSets, error } = await supabase
         .from('eval_sets')
         .select(`
@@ -104,6 +116,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             prompt_id
           )
         `)
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -140,6 +153,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // POST: Create eval set, duplicate, archive, unarchive, run batch, or add prompt
   if (req.method === 'POST') {
+    // Require authentication for POST operations
+    const auth = await requireAuth(req, res);
+    if (!auth) return; // Response already sent by requireAuth
+
+    const userId = auth.user.id;
+    // Extract auth token and create authenticated Supabase client
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || authHeader;
+    const supabase = createSupabaseClient(token);
     const { action } = req.body;
 
     // Duplicate eval set
@@ -181,6 +203,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             description: originalSet.description,
             default_models: originalSet.default_models,
             default_parameters: originalSet.default_parameters,
+            user_id: userId,
           })
           .select('id, name, description, default_models, default_parameters, created_at, updated_at, archived')
           .single();
@@ -358,7 +381,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             // Create prompt and run records
             const { data: insertedPrompt, error: promptError } = await supabase
               .from('prompts')
-              .insert({ text: promptText })
+              .insert({ text: promptText, user_id: userId })
               .select('id')
               .single();
 
@@ -369,7 +392,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
             const { data: insertedRun, error: runError } = await supabase
               .from('runs')
-              .insert({ prompt_id: insertedPrompt.id })
+              .insert({ prompt_id: insertedPrompt.id, user_id: userId })
               .select('id')
               .single();
 
@@ -606,7 +629,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         if (prompt_text && !prompt_id) {
           const { data: newPrompt, error: createPromptError } = await supabase
             .from('prompts')
-            .insert({ text: prompt_text })
+            .insert({ text: prompt_text, user_id: userId })
             .select('id')
             .single();
 
@@ -695,6 +718,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .insert({
           name: name.trim(),
           description: description ? description.trim() : null,
+          user_id: userId,
         })
         .select('id, name, description, created_at, updated_at, archived')
         .single();
@@ -718,6 +742,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // PUT: Update eval set, edit prompt, reorder prompts, update models, update parameters
   if (req.method === 'PUT') {
+    // Require authentication for PUT operations
+    const auth = await requireAuth(req, res);
+    if (!auth) return; // Response already sent by requireAuth
+
+    const userId = auth.user.id;
+    // Extract auth token and create authenticated Supabase client
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || authHeader;
+    const supabase = createSupabaseClient(token);
     const { action } = req.body;
 
     // Update eval set (name/description)
@@ -941,6 +974,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   // DELETE: Delete eval set or remove prompt from set
   if (req.method === 'DELETE') {
+    // Require authentication for DELETE operations
+    const auth = await requireAuth(req, res);
+    if (!auth) return; // Response already sent by requireAuth
+
+    const userId = auth.user.id;
+    // Extract auth token and create authenticated Supabase client
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.replace('Bearer ', '') || authHeader;
+    const supabase = createSupabaseClient(token);
     const { id, eval_set_id, prompt_id, eval_set_prompt_id } = req.query;
 
     // Delete prompt from eval set
