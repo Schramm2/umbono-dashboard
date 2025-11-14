@@ -32,7 +32,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       if (id && typeof id === 'string') {
         const { data: evalSet, error: evalSetError } = await supabase
           .from('eval_sets')
-          .select('id, name, description, created_at, updated_at')
+          .select('id, name, description, default_models, default_parameters, created_at, updated_at, archived')
           .eq('id', id)
           .single();
 
@@ -94,8 +94,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id,
           name,
           description,
+          default_models,
+          default_parameters,
           created_at,
           updated_at,
+          archived,
           eval_set_prompts (
             id,
             prompt_id
@@ -117,9 +120,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           id: evalSet.id,
           name: evalSet.name,
           description: evalSet.description,
+          default_models: evalSet.default_models,
+          default_parameters: evalSet.default_parameters,
           promptCount: promptCount,
           created_at: evalSet.created_at,
           updated_at: evalSet.updated_at,
+          archived: evalSet.archived || false,
         };
       });
 
@@ -132,7 +138,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // POST: Create eval set, duplicate, archive, run batch, or add prompt
+  // POST: Create eval set, duplicate, archive, unarchive, run batch, or add prompt
   if (req.method === 'POST') {
     const { action } = req.body;
 
@@ -148,7 +154,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Fetch the original eval set
         const { data: originalSet, error: fetchError } = await supabase
           .from('eval_sets')
-          .select('name, description')
+          .select('name, description, default_models, default_parameters')
           .eq('id', id)
           .single();
 
@@ -173,8 +179,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .insert({
             name: `${originalSet.name} (Copy)`,
             description: originalSet.description,
+            default_models: originalSet.default_models,
+            default_parameters: originalSet.default_parameters,
           })
-          .select('id, name, description, created_at, updated_at')
+          .select('id, name, description, default_models, default_parameters, created_at, updated_at, archived')
           .single();
 
         if (createError || !newEvalSet) {
@@ -255,6 +263,52 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     }
 
+    // Unarchive eval set
+    if (action === 'unarchive') {
+      const { id } = req.body;
+      if (!id) {
+        res.status(400).json({ message: 'Eval set ID is required for unarchiving' });
+        return;
+      }
+
+      try {
+        // Check if eval set exists
+        const { data: evalSet, error: checkError } = await supabase
+          .from('eval_sets')
+          .select('id')
+          .eq('id', id)
+          .single();
+
+        if (checkError || !evalSet) {
+          res.status(404).json({ message: 'Eval set not found' });
+          return;
+        }
+
+        // Note: This assumes an 'archived' boolean field exists in the schema
+        // If not, you may need to add it: ALTER TABLE eval_sets ADD COLUMN archived BOOLEAN DEFAULT false;
+        const { error: updateError } = await supabase
+          .from('eval_sets')
+          .update({ archived: false })
+          .eq('id', id);
+
+        if (updateError) {
+          // If archived field doesn't exist, return a message suggesting schema update
+          res.status(500).json({
+            message: 'Unarchive functionality requires an "archived" field in eval_sets table',
+            error: updateError.message,
+          });
+          return;
+        }
+
+        res.status(200).json({ message: 'Eval set unarchived successfully' });
+        return;
+      } catch (error: any) {
+        console.error('API EvalSets Unarchive Error:', error.message);
+        res.status(500).json({ message: 'Internal server error', error: error.message });
+        return;
+      }
+    }
+
     // Run batch evaluation
     if (action === 'run-batch') {
       const { id, model_ids, temperature, max_tokens } = req.body;
@@ -327,6 +381,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
             const runId = insertedRun.id;
             const maxTokens = max_tokens || 4096;
 
+            // Validate and clamp temperature to 0-1 range (required for Anthropic)
+            const validatedTemperature = temperature !== undefined && temperature !== null
+              ? Math.max(0, Math.min(1, Number(temperature)))
+              : undefined;
+
             // Execute API calls for all models in parallel
             const outputPromises = models.map(async (model) => {
               const startTime = Date.now();
@@ -336,36 +395,88 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               let error: string | null = null;
 
               try {
-                const modelMaxTokens = model.max_tokens || maxTokens;
+                // Start with user-provided max_tokens (or default), then apply model-specific caps
+                let modelMaxTokens = maxTokens;
+
+                // Apply model-specific max_tokens limits (cap user input at model's maximum)
+                if (model.provider === 'OpenAI') {
+                  // GPT-3.5 Turbo has a 4096 completion token limit
+                  if (model.version?.includes('gpt-3.5-turbo') || model.version?.includes('gpt-3.5')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 4096);
+                  }
+                  // GPT-4 models have higher limits, but cap at reasonable value
+                  else if (model.version?.includes('gpt-4')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 8192);
+                  }
+                } else if (model.provider === 'Anthropic') {
+                  // Claude 3 Haiku has a 4096 output token limit
+                  if (model.version?.includes('claude-3-haiku') || model.version?.includes('haiku')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 4096);
+                  }
+                  // Claude 3 Sonnet has a 4096 output token limit
+                  else if (model.version?.includes('claude-3-sonnet') || model.version?.includes('sonnet-3')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 4096);
+                  }
+                  // Claude 3 Opus has a 4096 output token limit
+                  else if (model.version?.includes('claude-3-opus') || model.version?.includes('opus-3')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 4096);
+                  }
+                  // Claude 3.5 Sonnet has an 8192 output token limit
+                  else if (model.version?.includes('claude-3-5-sonnet') || model.version?.includes('sonnet-3.5')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 8192);
+                  }
+                  // Claude 3.5 Haiku has an 8192 output token limit
+                  else if (model.version?.includes('claude-3-5-haiku') || model.version?.includes('haiku-3.5')) {
+                    modelMaxTokens = Math.min(modelMaxTokens, 8192);
+                  }
+                  // Default for other Claude models: 4096
+                  else {
+                    modelMaxTokens = Math.min(modelMaxTokens, 4096);
+                  }
+                }
 
                 switch (model.provider) {
                   case 'OpenAI':
-                    const openAICompletion = await openai.chat.completions.create({
+                    const openAIParams: any = {
                       model: model.version,
                       messages: [{ role: 'user', content: promptText }],
                       max_tokens: modelMaxTokens,
-                      temperature: temperature,
-                    });
+                    };
+                    if (validatedTemperature !== undefined) {
+                      openAIParams.temperature = validatedTemperature;
+                    }
+                    const openAICompletion = await openai.chat.completions.create(openAIParams);
                     modelOutputText = openAICompletion.choices[0]?.message?.content || '';
                     inputTokens = openAICompletion.usage?.prompt_tokens || 0;
                     outputTokens = openAICompletion.usage?.completion_tokens || 0;
                     break;
 
                   case 'Anthropic':
-                    const anthropicCompletion = await anthropic.messages.create({
+                    // Use streaming for long-running operations (required for operations > 10 minutes)
+                    // Anthropic requires temperature to be between 0 and 1
+                    const anthropicParams: any = {
                       model: model.version,
                       max_tokens: modelMaxTokens,
                       messages: [{ role: 'user', content: promptText }],
-                      temperature: temperature,
-                    });
-                    const anthropicContent = anthropicCompletion.content[0];
-                    if (anthropicContent && 'text' in anthropicContent) {
-                      modelOutputText = anthropicContent.text || '';
-                    } else {
-                      modelOutputText = JSON.stringify(anthropicContent) || '';
+                    };
+                    if (validatedTemperature !== undefined) {
+                      anthropicParams.temperature = validatedTemperature;
                     }
-                    inputTokens = anthropicCompletion.usage.input_tokens || 0;
-                    outputTokens = anthropicCompletion.usage.output_tokens || 0;
+                    const anthropicStream = await anthropic.messages.stream(anthropicParams);
+
+                    // Collect streamed text chunks
+                    let anthropicText = '';
+                    for await (const event of anthropicStream) {
+                      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                        anthropicText += event.delta.text;
+                      }
+                    }
+
+                    // Get final message with usage information
+                    const finalMessage = await anthropicStream.finalMessage();
+                    modelOutputText = anthropicText;
+                    inputTokens = finalMessage.usage?.input_tokens || 0;
+                    outputTokens = finalMessage.usage?.output_tokens || 0;
                     break;
 
                   case 'Google':
@@ -380,12 +491,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     break;
 
                   case 'Mistral AI':
-                    const mistralCompletion = await mistral.chat.complete({
+                    const mistralParams: any = {
                       model: model.version,
                       messages: [{ role: 'user', content: promptText }],
-                      temperature: temperature,
                       maxTokens: modelMaxTokens,
-                    });
+                    };
+                    if (validatedTemperature !== undefined) {
+                      mistralParams.temperature = validatedTemperature;
+                    }
+                    const mistralCompletion = await mistral.chat.complete(mistralParams);
                     const mistralContent = mistralCompletion.choices[0]?.message.content;
                     if (typeof mistralContent === 'string') {
                       modelOutputText = mistralContent;
@@ -582,7 +696,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           name: name.trim(),
           description: description ? description.trim() : null,
         })
-        .select('id, name, description, created_at, updated_at')
+        .select('id, name, description, created_at, updated_at, archived')
         .single();
 
       if (error) {
@@ -635,7 +749,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           .from('eval_sets')
           .update(updateData)
           .eq('id', id)
-          .select('id, name, description, created_at, updated_at')
+          .select('id, name, description, default_models, default_parameters, created_at, updated_at, archived')
           .single();
 
         if (error) {

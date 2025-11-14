@@ -261,21 +261,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               break;
 
               case 'Anthropic':
-              const anthropicCompletion = await anthropic.messages.create({
+              // Use streaming for long-running operations (required for operations > 10 minutes)
+              const anthropicStream = await anthropic.messages.stream({
                 model: model.version,
                 max_tokens: 4096,
                 messages: [{ role: 'user', content: prompt }],
               });
 
-              // Extract text from content blocks (can be TextBlock or other types)
-              const anthropicContent = anthropicCompletion.content[0];
-              if (anthropicContent && 'text' in anthropicContent) {
-                modelOutputText = anthropicContent.text || '';
-              } else {
-                modelOutputText = JSON.stringify(anthropicContent) || '';
+              // Collect streamed text chunks
+              let anthropicText = '';
+              for await (const event of anthropicStream) {
+                if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+                  anthropicText += event.delta.text;
+                }
               }
-              inputTokens = anthropicCompletion.usage.input_tokens || 0;
-              outputTokens = anthropicCompletion.usage.output_tokens || 0;
+
+              // Get final message with usage information
+              const finalMessage = await anthropicStream.finalMessage();
+              modelOutputText = anthropicText;
+              inputTokens = finalMessage.usage?.input_tokens || 0;
+              outputTokens = finalMessage.usage?.output_tokens || 0;
               break;
 
               case 'Google':

@@ -88,6 +88,8 @@ CREATE TABLE eval_sets (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
+    default_models JSONB, -- Array of model IDs for batch runs
+    default_parameters JSONB, -- Object with temperature, max_tokens, etc.
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
