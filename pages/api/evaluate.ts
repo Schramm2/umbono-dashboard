@@ -21,6 +21,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // The frontend sends model_id as output_id, so we need to look up the actual output record
+    // using run_id and model_id combination (which has a UNIQUE constraint)
+    const { data: outputRecord, error: outputLookupError } = await supabase
+      .from('outputs')
+      .select('id')
+      .eq('run_id', run_id)
+      .eq('model_id', output_id)
+      .single();
+    
+    let actualOutputId: string;
+    
+    if (outputLookupError || !outputRecord) {
+      // If lookup fails, try using output_id directly as the output id (for backward compatibility)
+      // First verify it exists
+      const { data: directOutput, error: directError } = await supabase
+        .from('outputs')
+        .select('id, run_id')
+        .eq('id', output_id)
+        .single();
+      
+      if (directError || !directOutput) {
+        return res.status(404).json({ 
+          message: `Output not found. Tried lookup by run_id: ${run_id} and model_id: ${output_id}, and by output_id: ${output_id}. ${outputLookupError?.message || directError?.message || ''}` 
+        });
+      }
+      
+      // Verify the run_id matches
+      if (directOutput.run_id !== run_id) {
+        return res.status(400).json({ 
+          message: `Output ${output_id} does not belong to run ${run_id}.` 
+        });
+      }
+      
+      actualOutputId = output_id;
+    } else {
+      actualOutputId = outputRecord.id;
+    }
     // Fetch all criteria with their weights
     const { data: criteria, error: criteriaError } = await supabase
       .from('evaluation_criteria')
@@ -36,19 +73,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       criteria.map((c) => [c.name.toLowerCase().replace(/\s+/g, '_'), c])
     );
 
+    // Track processed criteria to prevent duplicates
+    const processedCriteriaIds = new Set<string>();
+    
     let totalWeightedScore = 0;
-    const ratingsToInsert = userRatings.map((rating: any) => {
-      // Try to find criterion by ID first, then by name (normalized)
-      let criterion = criteriaMapById.get(rating.criterion_id);
-      if (!criterion) {
-        // Normalize the criterion_id to match the name format (lowercase, underscores)
-        const normalizedName = rating.criterion_id.toLowerCase().replace(/\s+/g, '_');
-        criterion = criteriaMapByName.get(normalizedName);
-      }
-      
-      if (!criterion) {
-        throw new Error(`Criterion with ID/name "${rating.criterion_id}" not found. Available criteria: ${criteria.map(c => c.name).join(', ')}`);
-      }
+    const ratingsToInsert = userRatings
+      .filter((rating: any) => {
+        // Try to find criterion by ID first, then by name (normalized)
+        let criterion = criteriaMapById.get(rating.criterion_id);
+        if (!criterion) {
+          // Normalize the criterion_id to match the name format (lowercase, underscores)
+          const normalizedName = rating.criterion_id.toLowerCase().replace(/\s+/g, '_');
+          criterion = criteriaMapByName.get(normalizedName);
+        }
+        
+        if (!criterion) {
+          throw new Error(`Criterion with ID/name "${rating.criterion_id}" not found. Available criteria: ${criteria.map(c => c.name).join(', ')}`);
+        }
+
+        // Check for duplicate criteria in the same request
+        if (processedCriteriaIds.has(criterion.id)) {
+          console.warn(`[Evaluate] Duplicate rating for criterion "${criterion.name}" (ID: ${criterion.id}). Skipping duplicate.`);
+          return false; // Filter out duplicate
+        }
+        processedCriteriaIds.add(criterion.id);
+        return true; // Keep this rating
+      })
+      .map((rating: any) => {
+        // Find criterion again (we know it exists from filter step)
+        let criterion = criteriaMapById.get(rating.criterion_id);
+        if (!criterion) {
+          const normalizedName = rating.criterion_id.toLowerCase().replace(/\s+/g, '_');
+          criterion = criteriaMapByName.get(normalizedName);
+        }
+        
+        if (!criterion) {
+          throw new Error(`Criterion with ID/name "${rating.criterion_id}" not found.`);
+        }
 
       let scoreValue = rating.score_value;
       let value: number | null = null;
@@ -60,20 +121,56 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         boolean_value = Boolean(scoreValue);
         scoreValue = boolean_value ? 1 : 0;
       } else {
-        // For slider type, store as integer value
-        value = Number(scoreValue);
+        // For slider type, convert to number and store as integer value
+        scoreValue = Number(scoreValue);
+        if (isNaN(scoreValue)) {
+          throw new Error(`Invalid score value "${rating.score_value}" for criterion "${criterion.name}". Expected a number.`);
+        }
+        // Ensure score is within valid range (1-5 for sliders)
+        if (scoreValue < 1 || scoreValue > 5) {
+          console.warn(`Score value ${scoreValue} for criterion "${criterion.name}" is outside valid range (1-5). Clamping to valid range.`);
+          scoreValue = Math.max(1, Math.min(5, scoreValue));
+        }
+        value = Math.round(scoreValue); // Round to integer for database storage
       }
 
-      // Calculate weighted score
-      totalWeightedScore += scoreValue * criterion.weight;
+      // Calculate weighted score using the numeric scoreValue
+      // Use frontend weights to match the UI calculation:
+      // Clarity: 0.3, Helpfulness: 0.4, Creativity: 0.2, Ubuntu Alignment: 0.5
+      // These weights are normalized to sum to 1.4, giving a max score of 5.0
+      let weight = Number(criterion.weight) || 0;
+      
+      // Override database weights with frontend weights for consistency
+      const criterionNameLower = criterion.name.toLowerCase();
+      if (criterionNameLower === 'clarity') {
+        weight = 0.3;
+      } else if (criterionNameLower === 'helpfulness') {
+        weight = 0.4;
+      } else if (criterionNameLower === 'creativity') {
+        weight = 0.2;
+      } else if (criterionNameLower.includes('ubuntu')) {
+        weight = 0.5;
+      }
+      
+      const weightedContribution = scoreValue * weight;
+      totalWeightedScore += weightedContribution;
+
+      // Debug logging (can be removed in production)
+      console.log(`[Evaluate] Criterion: ${criterion.name}, Score: ${scoreValue}, Weight: ${weight}, Contribution: ${weightedContribution}, Running Total: ${totalWeightedScore}`);
 
       return {
-        output_id,
+        output_id: actualOutputId, // Use the actual output UUID from the database
         criterion_id: criterion.id, // Use the actual UUID from the database
         value,
         boolean_value,
       };
     });
+
+    // Debug: Log final calculation summary
+    console.log(`[Evaluate] Final calculation summary:`);
+    console.log(`[Evaluate] Total ratings processed: ${ratingsToInsert.length}`);
+    console.log(`[Evaluate] Total weighted score: ${totalWeightedScore}`);
+    console.log(`[Evaluate] Ratings array length from frontend: ${userRatings.length}`);
 
     // Insert ratings (upsert if re-evaluating)
     const { error: insertRatingsError } = await supabase
@@ -88,15 +185,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const { error: updateOutputError } = await supabase
       .from('outputs')
       .update({ computed_score: totalWeightedScore })
-      .eq('id', output_id);
+      .eq('id', actualOutputId);
 
     if (updateOutputError) {
       throw new Error(updateOutputError.message || 'Failed to update output score.');
     }
 
+    // Return both computed_score (for consistency) and score (for frontend compatibility)
     return res.status(200).json({
       message: 'Evaluation saved successfully!',
       computed_score: totalWeightedScore,
+      score: totalWeightedScore, // Also return as 'score' for frontend compatibility
     });
   } catch (error: any) {
     console.error('API Evaluate Error:', error.message);
