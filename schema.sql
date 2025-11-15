@@ -33,6 +33,7 @@ CREATE TABLE prompts (
 CREATE TABLE runs (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     prompt_id UUID NOT NULL REFERENCES prompts(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES profiles(id) ON DELETE SET NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     notes TEXT
 );
@@ -103,8 +104,71 @@ CREATE TABLE eval_set_prompts (
     UNIQUE(eval_set_id, prompt_id)
 );
 
+-- Profiles table: Stores user profile information
+-- This table is linked to Supabase auth.users via the id column
+CREATE TABLE profiles (
+    id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    email VARCHAR(255) NOT NULL,
+    full_name VARCHAR(255),
+    role VARCHAR(20) DEFAULT 'user' CHECK (role IN ('user', 'admin', 'viewer')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- User Settings table: Stores user preferences and settings
+CREATE TABLE user_settings (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID NOT NULL UNIQUE REFERENCES profiles(id) ON DELETE CASCADE,
+    
+    -- Appearance & UI Settings
+    theme_preference VARCHAR(10) DEFAULT 'dark' CHECK (theme_preference IN ('light', 'dark', 'system')),
+    font_size VARCHAR(20) DEFAULT 'medium' CHECK (font_size IN ('small', 'medium', 'large', 'xlarge')),
+    compact_mode BOOLEAN DEFAULT false,
+    show_tooltips BOOLEAN DEFAULT true,
+    show_hints BOOLEAN DEFAULT true,
+    
+    -- Model & Evaluation Settings
+    default_temperature NUMERIC(3, 2) DEFAULT 0.4 CHECK (default_temperature >= 0 AND default_temperature <= 2),
+    default_top_p NUMERIC(3, 2) DEFAULT 1.0 CHECK (default_top_p >= 0 AND default_top_p <= 1),
+    default_max_tokens INTEGER DEFAULT 400 CHECK (default_max_tokens > 0),
+    default_selected_models JSONB DEFAULT '[]'::jsonb, -- Array of model IDs
+    
+    -- Evaluation Weights (stored as JSONB for flexibility)
+    evaluation_weights JSONB DEFAULT '{
+        "clarity": 0.3,
+        "helpfulness": 0.4,
+        "creativity": 0.2,
+        "ubuntu_alignment": 0.5
+    }'::jsonb,
+    
+    -- Workflow & Behavior Settings
+    keyboard_shortcuts_enabled BOOLEAN DEFAULT true,
+    auto_save_prompts BOOLEAN DEFAULT false,
+    default_template TEXT,
+    
+    -- Prompt Editor Settings
+    prompt_max_length INTEGER DEFAULT 2000 CHECK (prompt_max_length > 0),
+    prompt_word_wrap BOOLEAN DEFAULT true,
+    prompt_line_numbers BOOLEAN DEFAULT true,
+    prompt_font_family VARCHAR(100) DEFAULT 'monospace',
+    
+    -- Notifications & Alerts
+    toast_notifications_enabled BOOLEAN DEFAULT true,
+    sound_effects_enabled BOOLEAN DEFAULT false,
+    email_notifications_enabled BOOLEAN DEFAULT false,
+    email_on_evaluation_complete BOOLEAN DEFAULT false,
+    email_on_run_complete BOOLEAN DEFAULT false,
+    
+    -- Data & Privacy
+    data_sharing_enabled BOOLEAN DEFAULT true,
+    
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better query performance
 CREATE INDEX idx_runs_prompt_id ON runs(prompt_id);
+CREATE INDEX idx_runs_user_id ON runs(user_id);
 CREATE INDEX idx_outputs_run_id ON outputs(run_id);
 CREATE INDEX idx_outputs_model_id ON outputs(model_id);
 CREATE INDEX idx_ratings_output_id ON ratings(output_id);
@@ -112,6 +176,7 @@ CREATE INDEX idx_ratings_criterion_id ON ratings(criterion_id);
 CREATE INDEX idx_eval_set_prompts_eval_set_id ON eval_set_prompts(eval_set_id);
 CREATE INDEX idx_eval_set_prompts_prompt_id ON eval_set_prompts(prompt_id);
 CREATE INDEX idx_models_is_active ON models(is_active);
+CREATE INDEX idx_user_settings_user_id ON user_settings(user_id);
 
 -- Pre-populate evaluation_criteria table
 INSERT INTO evaluation_criteria (name, description, type, min_value, max_value, weight) VALUES
@@ -141,4 +206,35 @@ CREATE TRIGGER update_evaluation_criteria_updated_at BEFORE UPDATE ON evaluation
 
 CREATE TRIGGER update_eval_sets_updated_at BEFORE UPDATE ON eval_sets
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_profiles_updated_at BEFORE UPDATE ON profiles
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_user_settings_updated_at BEFORE UPDATE ON user_settings
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Function to automatically create a profile when a user signs up
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name, role)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', ''),
+        'user'
+    );
+    
+    -- Also create default user settings
+    INSERT INTO public.user_settings (user_id)
+    VALUES (NEW.id);
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger to create profile and settings when a new user is created in auth.users
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 

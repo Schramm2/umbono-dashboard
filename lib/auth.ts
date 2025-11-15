@@ -16,6 +16,54 @@ export interface UserProfile {
   updated_at?: string;
 }
 
+export interface UserSettings {
+  id: string;
+  user_id: string;
+  
+  // Appearance & UI Settings
+  theme_preference?: 'light' | 'dark' | 'system';
+  font_size?: 'small' | 'medium' | 'large' | 'xlarge';
+  compact_mode?: boolean;
+  show_tooltips?: boolean;
+  show_hints?: boolean;
+  
+  // Model & Evaluation Settings
+  default_temperature?: number;
+  default_top_p?: number;
+  default_max_tokens?: number;
+  default_selected_models?: string[]; // Array of model IDs
+  evaluation_weights?: {
+    clarity?: number;
+    helpfulness?: number;
+    creativity?: number;
+    ubuntu_alignment?: number;
+  };
+  
+  // Workflow & Behavior Settings
+  keyboard_shortcuts_enabled?: boolean;
+  auto_save_prompts?: boolean;
+  default_template?: string;
+  
+  // Prompt Editor Settings
+  prompt_max_length?: number;
+  prompt_word_wrap?: boolean;
+  prompt_line_numbers?: boolean;
+  prompt_font_family?: string;
+  
+  // Notifications & Alerts
+  toast_notifications_enabled?: boolean;
+  sound_effects_enabled?: boolean;
+  email_notifications_enabled?: boolean;
+  email_on_evaluation_complete?: boolean;
+  email_on_run_complete?: boolean;
+  
+  // Data & Privacy
+  data_sharing_enabled?: boolean;
+  
+  created_at?: string;
+  updated_at?: string;
+}
+
 /**
  * Extract and verify auth token from request headers
  */
@@ -119,5 +167,22 @@ export async function requireAdmin(
 export async function hasRole(userId: string, role: string): Promise<boolean> {
   const profile = await getUserProfile(userId);
   return profile?.role === role;
+}
+
+/**
+ * Get user settings from database
+ */
+export async function getUserSettings(userId: string): Promise<UserSettings | null> {
+  const { data: settings, error } = await supabaseAdmin
+    .from('user_settings')
+    .select('*')
+    .eq('user_id', userId)
+    .single();
+
+  if (error || !settings) {
+    return null;
+  }
+
+  return settings;
 }
 
