@@ -5,14 +5,16 @@ import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
-  const preflightResponse = handleCorsPreflight(req, res);
-  if (preflightResponse) return preflightResponse;
+  if (handleCorsPreflight(req, res)) {
+    return; // Response already sent by handleCorsPreflight
+  }
 
   // Set CORS headers for all responses
   setCorsHeaders(res, req.headers.origin);
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    res.status(405).json({ message: 'Method not allowed' });
+    return;
   }
 
   // Require authentication for leaderboard access
@@ -146,7 +148,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         query = query.in('run_id', userFilteredRunIds);
       } else if (!runsError && userRuns && userRuns.length === 0) {
         // User has no runs, return empty result early
-        return res.status(200).json([]);
+        res.status(200).json([]);
+        return;
       }
     }
 
@@ -157,7 +160,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     if (!rawData || rawData.length === 0) {
-      return res.status(200).json([]);
+      res.status(200).json([]);
+      return;
     }
 
     // Fetch criteria names for display
@@ -322,10 +326,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Sort by overall score descending by default
     leaderboardData.sort((a, b) => b.overall - a.overall);
 
-    return res.status(200).json(leaderboardData);
+    res.status(200).json(leaderboardData);
   } catch (error: any) {
     console.error('API Leaderboard Error:', error.message);
-    return res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
 

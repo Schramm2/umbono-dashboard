@@ -10,8 +10,9 @@ const supabasePublic = createClient(supabaseUrl, supabaseAnonKey);
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
-  const preflightResponse = handleCorsPreflight(req, res);
-  if (preflightResponse) return preflightResponse;
+  if (handleCorsPreflight(req, res)) {
+    return; // Response already sent by handleCorsPreflight
+  }
 
   // Set CORS headers for all responses
   setCorsHeaders(res, req.headers.origin);

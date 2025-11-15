@@ -16,11 +16,12 @@ export function setCorsHeaders(res: NextApiResponse, origin?: string) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
 }
 
-export function handleCorsPreflight(req: any, res: NextApiResponse) {
+export function handleCorsPreflight(req: any, res: NextApiResponse): boolean {
   if (req.method === 'OPTIONS') {
     setCorsHeaders(res, req.headers.origin);
-    return res.status(200).end();
+    res.status(200).end();
+    return true;
   }
-  return null;
+  return false;
 }
 

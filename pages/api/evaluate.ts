@@ -5,14 +5,16 @@ import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
-  const preflightResponse = handleCorsPreflight(req, res);
-  if (preflightResponse) return preflightResponse;
+  if (handleCorsPreflight(req, res)) {
+    return; // Response already sent by handleCorsPreflight
+  }
 
   // Set CORS headers for all responses
   setCorsHeaders(res, req.headers.origin);
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    res.status(405).json({ message: 'Method not allowed' });
+    return;
   }
 
   // Require authentication for evaluation
@@ -27,7 +29,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   const { run_id, output_id, ratings: userRatings } = req.body;
 
   if (!run_id || !output_id || !userRatings || !Array.isArray(userRatings) || userRatings.length === 0) {
-    return res.status(400).json({ message: 'Missing required evaluation data.' });
+    res.status(400).json({ message: 'Missing required evaluation data.' });
+    return;
   }
 
   try {
@@ -52,16 +55,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         .single();
       
       if (directError || !directOutput) {
-        return res.status(404).json({ 
+        res.status(404).json({ 
           message: `Output not found. Tried lookup by run_id: ${run_id} and model_id: ${output_id}, and by output_id: ${output_id}. ${outputLookupError?.message || directError?.message || ''}` 
         });
+        return;
       }
       
       // Verify the run_id matches
       if (directOutput.run_id !== run_id) {
-        return res.status(400).json({ 
+        res.status(400).json({ 
           message: `Output ${output_id} does not belong to run ${run_id}.` 
         });
+        return;
       }
       
       actualOutputId = output_id;
@@ -191,14 +196,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     // Return both computed_score (for consistency) and score (for frontend compatibility)
-    return res.status(200).json({
+    res.status(200).json({
       message: 'Evaluation saved successfully!',
       computed_score: totalWeightedScore,
       score: totalWeightedScore, // Also return as 'score' for frontend compatibility
     });
   } catch (error: any) {
     console.error('API Evaluate Error:', error.message);
-    return res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
 

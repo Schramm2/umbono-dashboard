@@ -5,14 +5,16 @@ import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
-  const preflightResponse = handleCorsPreflight(req, res);
-  if (preflightResponse) return preflightResponse;
+  if (handleCorsPreflight(req, res)) {
+    return; // Response already sent by handleCorsPreflight
+  }
 
   // Set CORS headers for all responses
   setCorsHeaders(res, req.headers.origin);
 
   if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    res.status(405).json({ message: 'Method not allowed' });
+    return;
   }
 
   // Require authentication for models access
@@ -36,10 +38,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       throw new Error(error.message);
     }
 
-    return res.status(200).json(data || []);
+    res.status(200).json(data || []);
   } catch (error: any) {
     console.error('API Models Error:', error.message);
-    return res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
 
