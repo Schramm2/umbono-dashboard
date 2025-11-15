@@ -91,8 +91,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         // Only admins can change roles
         const currentProfile = await getUserProfile(auth.user.id);
         if (role && role !== currentProfile?.role) {
-          const { profile: adminProfile } = await requireRole(req, res, ['admin']);
-          if (!adminProfile) return; // Response already sent
+          const adminResult = await requireRole(req, res, ['admin']);
+          if (!adminResult) return; // Response already sent
         }
 
         const updateData: any = {};
