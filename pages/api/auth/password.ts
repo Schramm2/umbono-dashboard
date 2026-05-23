@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase-server';
 import { setCorsHeaders, handleCorsPreflight } from '../../../lib/cors';
+import { isDemoMode } from '../../../lib/demo-mode';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -21,6 +22,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!auth) return;
 
   try {
+    if (isDemoMode) {
+      return res.status(200).json({
+        message: 'Demo password update simulated. No credentials were changed.',
+        simulated: true,
+      });
+    }
+
     const { current_password, new_password } = req.body;
 
     if (!current_password || !new_password) {
@@ -72,4 +80,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
-

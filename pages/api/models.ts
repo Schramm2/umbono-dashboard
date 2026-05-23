@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { createSupabaseClient } from '../../lib/supabase-server';
 import { requireAuth } from '../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
+import { isDemoMode } from '../../lib/demo-mode';
+import { demoModels } from '../../lib/demo-data';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -20,6 +22,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Require authentication for models access
   const auth = await requireAuth(req, res);
   if (!auth) return; // Response already sent by requireAuth
+
+  if (isDemoMode) {
+    res.status(200).json(demoModels);
+    return;
+  }
 
   // Extract auth token and create authenticated Supabase client
   const authHeader = req.headers.authorization;
@@ -44,4 +51,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
-

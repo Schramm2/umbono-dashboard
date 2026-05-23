@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth } from '../../../lib/auth';
 import { createSupabaseClient } from '../../../lib/supabase-server';
 import { setCorsHeaders, handleCorsPreflight } from '../../../lib/cors';
+import { isDemoMode } from '../../../lib/demo-mode';
+import { demoLeaderboard, demoProfile, demoTemplates, demoUser } from '../../../lib/demo-data';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -21,6 +23,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!auth) return;
 
   try {
+    if (isDemoMode) {
+      return res.status(200).json({
+        exported_at: new Date().toISOString(),
+        user_id: demoUser.id,
+        profile: demoProfile,
+        settings: { demo_mode: true },
+        runs: [],
+        prompts: demoTemplates,
+        evaluations: demoLeaderboard,
+        simulated: true,
+      });
+    }
+
     // Extract auth token and create authenticated Supabase client
     const authHeader = req.headers.authorization;
     const token = authHeader?.replace('Bearer ', '') || authHeader;
@@ -65,7 +80,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Get all prompts associated with user's runs
     if (runs && runs.length > 0) {
-      const promptIds = [...new Set(runs.map((run: any) => run.prompt_id))];
+      const promptIds = Array.from(new Set(runs.map((run: any) => run.prompt_id)));
       const { data: prompts } = await supabase
         .from('prompts')
         .select('*')
@@ -99,4 +114,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
-

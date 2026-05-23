@@ -1,7 +1,20 @@
+/**
+ * @file pages/api/leaderboard.ts
+ * @description API route handler for generating the models comparison leaderboard.
+ * Highlights:
+ * - Aggregates evaluations across runs, models, and custom ratings.
+ * - Computes p95 latency (95th percentile) for statistical response speeds.
+ * - Calculates actual cost per 1k tokens from provider pricing configurations.
+ * - Filters data dynamically by date range, specific model, evaluation sets, or user scope.
+ * - DEMO_MODE toggle: Returns clean pre-seeded leaderboard data shapes.
+ */
+
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createSupabaseClient } from '../../lib/supabase-server';
 import { requireAuth } from '../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
+import { isDemoMode } from '../../lib/demo-mode';
+import { demoLeaderboard } from '../../lib/demo-data';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -20,6 +33,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Require authentication for leaderboard access
   const auth = await requireAuth(req, res);
   if (!auth) return; // Response already sent by requireAuth
+
+  if (isDemoMode) {
+    const { provider } = req.query;
+    const data = provider && provider !== 'all'
+      ? demoLeaderboard.filter((item) => item.provider === provider)
+      : demoLeaderboard;
+    res.status(200).json(data);
+    return;
+  }
 
   // Extract auth token and create authenticated Supabase client
   const authHeader = req.headers.authorization;
@@ -332,4 +354,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
-

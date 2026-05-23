@@ -51,6 +51,7 @@ ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE eval_sets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE eval_set_prompts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_settings ENABLE ROW LEVEL SECURITY;
 
 -- ============================================
 -- MODELS TABLE POLICIES
@@ -515,4 +516,58 @@ WITH CHECK (
     (role = get_user_role())
   )
 );
+
+-- ============================================
+-- USER_SETTINGS TABLE POLICIES
+-- ============================================
+
+-- Admin can SELECT user_settings
+CREATE POLICY "Admin can SELECT user_settings"
+ON user_settings FOR SELECT
+TO authenticated
+USING (is_admin());
+
+-- Admin can INSERT user_settings
+CREATE POLICY "Admin can INSERT user_settings"
+ON user_settings FOR INSERT
+TO authenticated
+WITH CHECK (is_admin());
+
+-- Admin can UPDATE user_settings
+CREATE POLICY "Admin can UPDATE user_settings"
+ON user_settings FOR UPDATE
+TO authenticated
+USING (is_admin())
+WITH CHECK (is_admin());
+
+-- Admin can DELETE user_settings
+CREATE POLICY "Admin can DELETE user_settings"
+ON user_settings FOR DELETE
+TO authenticated
+USING (is_admin());
+
+-- Users can SELECT their own settings
+CREATE POLICY "Users can SELECT own settings"
+ON user_settings FOR SELECT
+TO authenticated
+USING (auth.uid() = user_id);
+
+-- Users can UPDATE their own settings
+CREATE POLICY "Users can UPDATE own settings"
+ON user_settings FOR UPDATE
+TO authenticated
+USING (auth.uid() = user_id)
+WITH CHECK (auth.uid() = user_id);
+
+-- Users can INSERT their own settings
+CREATE POLICY "Users can INSERT own settings"
+ON user_settings FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = user_id);
+
+-- Users can DELETE their own settings
+CREATE POLICY "Users can DELETE own settings"
+ON user_settings FOR DELETE
+TO authenticated
+USING (auth.uid() = user_id);
 

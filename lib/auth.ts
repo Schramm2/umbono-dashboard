@@ -1,5 +1,16 @@
+/**
+ * @file lib/auth.ts
+ * @description Authentication middleware and utility layer for Umbono.
+ * Supports dual-mode authentication:
+ * 1. DEMO_MODE: Bypasses external checks, returning deterministic mock users and settings.
+ * 2. PRODUCTION_MODE: Validates Supabase JWTs, extracts authenticated user sessions,
+ *    and enforces role-based access control (RBAC).
+ */
+
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from './supabase-server';
+import { isDemoMode } from './demo-mode';
+import { demoProfile, demoUser } from './demo-data';
 
 export interface AuthUser {
   id: string;
@@ -68,6 +79,10 @@ export interface UserSettings {
  * Extract and verify auth token from request headers
  */
 export async function getAuthUser(req: NextApiRequest): Promise<AuthUser | null> {
+  if (isDemoMode) {
+    return demoUser;
+  }
+
   const authHeader = req.headers.authorization;
   const token = authHeader?.replace('Bearer ', '') || authHeader;
   
@@ -106,6 +121,10 @@ export async function requireAuth(
  * Get user profile from database
  */
 export async function getUserProfile(userId: string): Promise<UserProfile | null> {
+  if (isDemoMode) {
+    return demoProfile as UserProfile;
+  }
+
   const { data: profile, error } = await supabaseAdmin
     .from('profiles')
     .select('*')
@@ -173,6 +192,28 @@ export async function hasRole(userId: string, role: string): Promise<boolean> {
  * Get user settings from database
  */
 export async function getUserSettings(userId: string): Promise<UserSettings | null> {
+  if (isDemoMode) {
+    return {
+      id: 'demo-settings',
+      user_id: demoUser.id,
+      theme_preference: 'light',
+      font_size: 'medium',
+      compact_mode: false,
+      show_tooltips: true,
+      show_hints: true,
+      default_temperature: 0.4,
+      default_top_p: 1,
+      default_max_tokens: 1200,
+      default_selected_models: ['demo-gpt-4o', 'demo-claude-sonnet', 'demo-gemini-flash'],
+      evaluation_weights: {
+        clarity: 0.3,
+        helpfulness: 0.4,
+        creativity: 0.2,
+        ubuntu_alignment: 0.5,
+      },
+    };
+  }
+
   const { data: settings, error } = await supabaseAdmin
     .from('user_settings')
     .select('*')
@@ -185,4 +226,3 @@ export async function getUserSettings(userId: string): Promise<UserSettings | nu
 
   return settings;
 }
-

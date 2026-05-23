@@ -91,6 +91,16 @@ DROP POLICY IF EXISTS "Admin can DELETE profiles" ON profiles;
 DROP POLICY IF EXISTS "Users can SELECT own profile" ON profiles;
 DROP POLICY IF EXISTS "Users can UPDATE own profile" ON profiles;
 
+-- User Settings
+DROP POLICY IF EXISTS "Admin can SELECT user_settings" ON user_settings;
+DROP POLICY IF EXISTS "Admin can INSERT user_settings" ON user_settings;
+DROP POLICY IF EXISTS "Admin can UPDATE user_settings" ON user_settings;
+DROP POLICY IF EXISTS "Admin can DELETE user_settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can SELECT own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can UPDATE own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can INSERT own settings" ON user_settings;
+DROP POLICY IF EXISTS "Users can DELETE own settings" ON user_settings;
+
 -- ============================================
 -- NOW RUN THE MAIN rls_policies.sql FILE
 -- ============================================

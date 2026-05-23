@@ -1,354 +1,178 @@
-# Umbono - AI Evaluation Dashboard
+# Umbono — AI Evaluation Dashboard
 
-An AI evaluation dashboard built with Next.js, TypeScript, Tailwind CSS, and Supabase. This platform enables comprehensive evaluation and comparison of multiple AI models across various providers including OpenAI, Anthropic, Google, and Mistral AI.
+[![Next.js](https://img.shields.io/badge/Next.js-14.0.4-black?style=flat-square&logo=next.js)](https://nextjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-3.4-38B2AC?style=flat-square&logo=tailwind-css)](https://tailwindcss.com/)
+[![Supabase](https://img.shields.io/badge/Supabase-Database_%26_Auth-3ECF8E?style=flat-square&logo=supabase)](https://supabase.com/)
+[![OpenAI](https://img.shields.io/badge/OpenAI-API-412991?style=flat-square&logo=openai)](https://openai.com/)
+[![Anthropic](https://img.shields.io/badge/Anthropic-Claude_3.5-D97706?style=flat-square)](https://www.anthropic.com/)
+[![Google Gemini](https://img.shields.io/badge/Google-Gemini_1.5-4285F4?style=flat-square&logo=google)](https://deepmind.google/technologies/gemini/)
 
-## Features
+Umbono is a multi-provider AI prompt evaluation dashboard designed to compare model response quality, latency, and token cost across OpenAI, Anthropic, Google, and Mistral. It enables teams to run prompt templates in parallel, apply weighted human evaluation criteria, and aggregate results into a leaderboard for model selection.
 
-- **Multi-Provider AI Integration**: Support for OpenAI, Anthropic (Claude), Google Gemini, and Mistral AI models
-- **Evaluation Management**: Create evaluation sets, run prompts across multiple models, and track performance metrics
-- **Comprehensive Scoring**: Weighted evaluation criteria including Clarity, Helpfulness, Creativity, and Ubuntu Alignment
-- **Leaderboard**: Aggregate performance metrics with filtering by date range, model, provider, and task type
-- **Cost Tracking**: Monitor token usage and costs per model
-- **Template Management**: Save and reuse prompt templates for consistent evaluations
+This repository features a **zero-dependency, self-contained Portfolio Showcase Demo Mode** alongside its fully-typed production codebase.
 
-## Getting Started
+---
 
-### Prerequisites
+## 🚀 Interactive Portfolio Demo
 
-- Node.js 18+ installed
-- A Supabase project created
-- API keys for AI providers you want to use:
-  - OpenAI API key
-  - Anthropic API key
-  - Google API key
-  - Mistral API key
+To experience the dashboard immediately without setting up databases or AI provider API keys:
 
-### Installation
-
-1. **Install dependencies:**
 ```bash
-npm install
+# Clone the repository
+git clone https://github.com/your-username/umbono-dashboard.git
+cd umbono-dashboard
+
+# Install dependencies and start local Showcase Demo Mode
+make install
+make demo
 ```
 
-2. **Set up environment variables:**
-   Create a `.env.local` file in the root directory with the following variables:
-   ```env
-   # Supabase Configuration
-   NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
-   NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-   # AI Provider API Keys (optional - only include providers you want to use)
-   OPENAI_API_KEY=your_openai_api_key
-   ANTHROPIC_API_KEY=your_anthropic_api_key
-   GOOGLE_API_KEY=your_google_api_key
-   MISTRAL_API_KEY=your_mistral_api_key
-   ```
+---
 
-   > **Note**: Environment variables prefixed with `NEXT_PUBLIC_` are exposed to the browser. Server-only variables (like API keys) should not have this prefix and will only be available in API routes and server-side code.
+## 📋 Overview
 
-3. **Set up the database:**
-   - Go to your Supabase project SQL Editor
-   - Run the SQL script from `schema.sql` to create all tables and relationships
-   - The schema includes tables for models, prompts, runs, outputs, evaluations, and more
+### The Problem
+When deploying LLM applications, choosing the right model is a multi-dimensional challenge. A model with the highest response quality might be too slow or expensive for production, while a faster model may fail specific behavioral guidelines. Teams need an objective tool to evaluate responses in parallel, score them against custom weighted criteria, and keep track of cost/performance leaderboards.
 
-4. **Run the development server:**
+### The Solution
+**Umbono** provides a central workspace to:
+- Test prompts simultaneously across different LLM providers and models.
+- Capture physical latency metrics and exact API input/output token usage.
+- Grade response samples using structured evaluation criteria (e.g., sliders for clarity and helpfulness, booleans for custom behavioral alignment like "Ubuntu Alignment").
+- Compile and rank models on a global leaderboard updated dynamically via weighted averages.
+
+### Target Audience
+Built for developers, prompt engineers, and product teams building LLM-backed applications who need a data-driven model selection framework.
+
+---
+
+## ✨ Key Features
+
+- **Parallel Provider Execution**: Execute prompt comparisons simultaneously across OpenAI (GPT-4o), Anthropic (Claude 3.5 Sonnet), Google (Gemini 1.5 Flash), and Mistral AI.
+- **Weighted Scoring System**: Configure human evaluation criteria (e.g., Clarity 30%, Helpfulness 40%, Creativity 20%, Ubuntu Alignment 50%) to score outputs.
+- **Dynamic Leaderboard**: Aggregate latency, cost per 1k tokens, specific criteria averages, and overall weighted score.
+- **Seeded Evaluation Sets**: Bundle prompts into themed "Eval Sets" to test models under specific scopes (e.g., "Community Safety Review" or "Cost vs Latency Sweep").
+- **Supabase Authentication**: Production-ready registration, login, and secure user-profile endpoints.
+- **Row-Level Security (RLS)**: Fine-grained SQL security rules in PostgreSQL ensuring users only access their own runs, prompts, and evaluations.
+
+---
+
+## 🛠️ Technical Highlights
+
+- **Provider Abstraction Pattern**: Standardized API execution interfaces wrap diverse SDKs (OpenAI, Anthropic, Google, Mistral) to return consistent shapes for latency, errors, token usage, and costs.
+- **Parallel Promise Execution**: Evaluates models concurrently via `Promise.all` in the Next.js API layer to minimize request wait times.
+- **Streaming Response Delta Assembly**: Implements Anthropic message delta streaming in the backend to safely handle long-running generation tasks without hitting proxy server timeouts.
+- **Dual-Mode Engine Architecture**: The entire application routes its backend API handlers dynamically based on `DEMO_MODE`. When enabled, database writes and external HTTP requests are swapped with in-memory deterministic simulation routines, rendering the repository safe and functional for public web hosting.
+
+---
+
+## 📐 System Architecture
+
+The following diagram illustrates how the Next.js front-end interfaces with API routes and branches based on the configured execution environment:
+
+```mermaid
+graph TD
+    Client[Next.js Frontend] -->|HTTP Request / Headers| API[Next.js API Handler]
+    API -->|Read Env Flag| Flag{DEMO_MODE == true?}
+    
+    %% Demo Mode Branch
+    Flag -->|Yes| Mock[In-Memory Mock Engine]
+    Mock -->|Seeded JSON Data| Seed[lib/demo-data.ts]
+    Mock -->|Simulate Latency & Cost| Client
+    
+    %% Production Mode Branch
+    Flag -->|No| Auth[Supabase Auth Token Validation]
+    Auth -->|Valid Session| DB[Supabase PostgreSQL DB]
+    Auth -->|Invalid| Err[401 Unauthorized]
+    
+    DB -->|Fetch Model Cost Configs| LLMs{LLM Providers}
+    LLMs -->|Parallel API Calls| OpenAI[OpenAI API]
+    LLMs -->|Parallel Stream Deltas| Anthropic[Anthropic API]
+    LLMs -->|Parallel API Calls| Google[Gemini API]
+    LLMs -->|Parallel API Calls| Mistral[Mistral API]
+    
+    OpenAI & Anthropic & Google & Mistral -->|Collect Metadata| DB
+    DB -->|Write Runs, Outputs & Scores| Client
+```
+
+---
+
+## 💾 Database Schema
+
+The database relies on a PostgreSQL schema designed to support user multi-tenancy:
+- **`profiles` / `user_settings`**: Track user roles (Admin, User, Viewer) and custom UI theme and weighted criteria defaults.
+- **`models`**: Store active model endpoints, provider tags, and base token input/output costs.
+- **`prompts` / `runs`**: Link a run session to the prompt text submitted by a user.
+- **`outputs`**: Capture generated text, latency in milliseconds, tokens used, and the calculated weighted score.
+- **`evaluation_criteria` / `ratings`**: Model-specific ratings for clarity, helpfulness, and custom boolean checks like "Ubuntu Alignment".
+
+For full schema and RLS setups, see [schema.sql](file:///Users/matthew-schramm-ubundi/Workspace.nosync/Personal/umbono-dashboard/schema.sql) and [rls_policies.sql](file:///Users/matthew-schramm-ubundi/Workspace.nosync/Personal/umbono-dashboard/rls_policies.sql).
+
+---
+
+## 📈 Suggested Areas for Visual Walkthroughs
+
+If you are deploying this as a live showcase, consider capturing screenshots or GIFs of the following key interfaces:
+1. **Interactive Evaluator Panel**: Shows the prompt editor, model selector checkboxes, and the progress bar.
+2. **Comparison Cards**: Visualizes the response grids from GPT-4o, Claude 3.5 Sonnet, and Gemini 1.5 Flash side-by-side with latency and cost tags.
+3. **Interactive Scoring Sliders**: Grading a specific response in real-time and seeing the overall score update instantly.
+4. **Leaderboard View**: The summary table showing overall scores, Ubuntu alignment percentages, latencies, and total run counts.
+
+---
+
+## 🛠️ Local Development & Production Setup
+
+To transition from the local demo mode into a fully functioning production environment:
+
+### 1. Database Setup
+1. Create a project in [Supabase](https://supabase.com).
+2. Open the Supabase **SQL Editor**.
+3. Copy, paste, and run the contents of [schema.sql](file:///Users/matthew-schramm-ubundi/Workspace.nosync/Personal/umbono-dashboard/schema.sql) to create the schema and seed active model metadata.
+4. Copy, paste, and run [rls_policies.sql](file:///Users/matthew-schramm-ubundi/Workspace.nosync/Personal/umbono-dashboard/rls_policies.sql) to set up Row-Level Security.
+
+### 2. Environment Variables Configuration
+Create a `.env.local` file in the root of the project:
+
+```env
+# Disable Demo Mode
+DEMO_MODE=false
+NEXT_PUBLIC_DEMO_MODE=false
+
+# Supabase Keys (Found in Supabase settings -> API)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJhbGciOi...
+SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
+
+# AI Provider API Keys (Only configure the ones you want to enable)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+GOOGLE_API_KEY=AIzaSy...
+MISTRAL_API_KEY=your_mistral_key
+```
+
+### 3. Run the Production Development Server
+Ensure you run under the non-demo script command:
 ```bash
-npm run dev
+make dev
 ```
+Test that you can register users and query actual LLM endpoints.
 
-5. **Open your browser:**
-   Navigate to [http://localhost:3000](http://localhost:3000)
+---
 
-## Project Structure
+## 📝 Engineering Lessons & Trade-offs
 
-```
-├── lib/
-│   ├── cors.ts              # CORS configuration for API routes
-│   └── supabase.ts          # Supabase client initialization
-├── pages/
-│   ├── api/
-│   │   ├── evalsets.ts      # Evaluation set management (CRUD operations)
-│   │   ├── evaluate.ts      # Submit evaluation ratings and scores
-│   │   ├── leaderboard.ts   # Aggregate model performance metrics
-│   │   ├── models.ts        # Fetch available AI models
-│   │   └── run.ts           # Create runs, execute prompts, manage templates
-│   ├── _app.tsx             # Next.js app wrapper with global styles
-│   └── index.tsx            # Home page
-├── styles/
-│   └── globals.css          # Global styles with Tailwind CSS
-├── schema.sql               # Database schema and table definitions
-├── example_models.sql       # Example model data for seeding
-└── SETUP.md                 # Detailed setup instructions
-```
+### Next.js Serverless Request Timeouts vs. Streaming Deltas
+When running a batch evaluation of multiple prompts in production, API calls to providers like Anthropic can occasionally take longer than 10–15 seconds, risking serverless function timeouts on hosts like Vercel. To mitigate this risk for Anthropic models, the backend implements `anthropic.messages.stream` to handle tokens dynamically. For other providers, promises are fired in parallel (`Promise.all`) to avoid sequential queuing delay.
 
-## Available Scripts
+### Numeric Score Integrity between DB and Frontend
+Evaluation criteria scores are represented by floating-point values computed on the fly. In the PostgreSQL schema, scores are stored in numeric columns to maintain precision, but to prevent float arithmetic drift on the client (e.g., displaying `4.199999999999999` overall score), API routes like `pages/api/leaderboard.ts` apply explicit rounding constraints (`toFixed(2)` and `toFixed(6)`) before returning payload JSON to the UI.
 
-- `npm run dev` - Start development server on http://localhost:3000
-- `npm run build` - Build for production
-- `npm start` - Start production server
-- `npm run lint` - Run ESLint to check code quality
+---
 
-## API Routes
-
-All API routes support CORS and handle preflight OPTIONS requests. Responses include appropriate CORS headers.
-
-### GET /api/models
-Fetches all active models from the database.
-
-**Response:**
-```json
-[
-  {
-    "id": "uuid",
-    "name": "GPT-4",
-    "provider": "OpenAI",
-    "version": "gpt-4",
-    "max_tokens": 8192,
-    "cost_input_per_million": 30.0,
-    "cost_output_per_million": 60.0
-  }
-]
-```
-
-### GET /api/run
-Fetches a run by ID or lists templates.
-
-**Query Parameters:**
-- `id` (string) - Run ID to fetch
-- `templates=true` - List all prompt templates
-- `template_id` (string) - Fetch specific template by ID
-
-**Response (Run):**
-```json
-{
-  "id": "uuid",
-  "created_at": "2024-01-01T00:00:00Z",
-  "notes": "Optional notes",
-  "prompt": {
-    "id": "uuid",
-    "text": "Prompt text",
-    "title": "Template title",
-    "description": "Template description"
-  },
-  "outputs": [
-    {
-      "id": "uuid",
-      "model_id": "uuid",
-      "model_name": "GPT-4",
-      "text": "Model response",
-      "latency_ms": 1234,
-      "cost": 0.001,
-      "input_tokens": 100,
-      "output_tokens": 200,
-      "tokens_used": 300,
-      "error": null,
-      "computed_score": 4.5
-    }
-  ]
-}
-```
-
-### POST /api/run
-Creates a new run by executing a prompt across multiple models.
-
-**Request Body:**
-```json
-{
-  "prompt": "Your evaluation prompt",
-  "model_ids": ["uuid1", "uuid2"]
-}
-```
-
-**Response:**
-```json
-{
-  "run_id": "uuid",
-  "outputs": [
-    {
-      "model_id": "uuid",
-      "model_name": "GPT-4",
-      "text": "Model response",
-      "latency_ms": 1234,
-      "input_tokens": 100,
-      "output_tokens": 200,
-      "cost": 0.001,
-      "error": null
-    }
-  ]
-}
-```
-
-**Save Template Action:**
-```json
-{
-  "action": "save-template",
-  "prompt_text": "Template prompt",
-  "title": "Template Title",
-  "description": "Template description"
-}
-```
-
-### GET /api/evalsets
-Lists evaluation sets or fetches a specific set with prompts.
-
-**Query Parameters:**
-- `id` (string) - Fetch specific eval set with prompts
-
-**Response (List):**
-```json
-[
-  {
-    "id": "uuid",
-    "name": "Eval Set Name",
-    "description": "Description",
-    "promptCount": 5,
-    "created_at": "2024-01-01T00:00:00Z"
-  }
-]
-```
-
-### POST /api/evalsets
-Creates or updates an evaluation set.
-
-**Request Body:**
-```json
-{
-  "name": "Eval Set Name",
-  "description": "Description",
-  "prompt_ids": ["uuid1", "uuid2"]
-}
-```
-
-### POST /api/evaluate
-Submits evaluation ratings for an output.
-
-**Request Body:**
-```json
-{
-  "run_id": "uuid",
-  "output_id": "uuid",
-  "ratings": [
-    {
-      "criterion_id": "uuid",
-      "score_value": 4
-    }
-  ]
-}
-```
-
-**Response:**
-```json
-{
-  "message": "Evaluation saved successfully!",
-  "computed_score": 4.2,
-  "score": 4.2
-}
-```
-
-### GET /api/leaderboard
-Fetches aggregated model performance metrics.
-
-**Query Parameters:**
-- `dateRange` (string) - "7", "30", "90", or "Last year"
-- `modelId` (string) - Filter by specific model
-- `provider` (string) - Filter by provider (e.g., "OpenAI")
-- `tag` (string) - Filter by eval set/task type
-
-**Response:**
-```json
-[
-  {
-    "modelId": "uuid",
-    "model": "GPT-4",
-    "provider": "OpenAI",
-    "overall": 4.5,
-    "ubuntuPct": 0.85,
-    "clarity": 4.2,
-    "helpfulness": 4.6,
-    "creativity": 4.1,
-    "p95LatencyMs": 2345,
-    "costPer1k": 0.045,
-    "runs": 100,
-    "updatedAt": "2024-01-01T00:00:00Z"
-  }
-]
-```
-
-## Tech Stack
-
-### Core Framework
-- **[Next.js 14](https://nextjs.org/)** - React framework with API routes, server-side rendering, and file-based routing
-- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe JavaScript for better developer experience
-- **[React 18](https://react.dev/)** - UI library for building interactive interfaces
-
-### Styling
-- **[Tailwind CSS](https://tailwindcss.com/)** - Utility-first CSS framework for rapid UI development
-
-### Database & Backend
-- **[Supabase](https://supabase.com/)** - Open-source Firebase alternative providing:
-  - PostgreSQL database with auto-generated REST APIs
-  - Real-time subscriptions
-  - Row-level security
-  - Built-in authentication (ready for future use)
-
-### AI Provider SDKs
-- **[OpenAI Node.js SDK](https://github.com/openai/openai-node)** - Official OpenAI API client for Node.js
-- **[Anthropic TypeScript SDK](https://github.com/anthropics/anthropic-sdk-typescript)** - Official Anthropic Claude API client
-- **[Google Generative AI SDK](https://github.com/google/generative-ai-nodejs)** - Google Gemini API client
-- **[Mistral AI SDK](https://github.com/mistralai/mistral-sdk-typescript)** - Mistral AI API client
-
-### Development Tools
-- **ESLint** - Code linting and quality checks
-- **PostCSS** - CSS processing with Tailwind
-- **Autoprefixer** - Automatic vendor prefixing for CSS
-
-## Environment Variables
-
-Next.js supports environment variables through `.env.local` files. Variables are loaded automatically:
-
-- **Server-only variables** (no `NEXT_PUBLIC_` prefix): Available only in API routes and server-side code
-- **Public variables** (`NEXT_PUBLIC_` prefix): Exposed to the browser at build time
-
-### Required Variables
-- `NEXT_PUBLIC_SUPABASE_URL` - Your Supabase project URL
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY` - Your Supabase anonymous/public key
-
-### Optional Variables (for AI providers)
-- `OPENAI_API_KEY` - OpenAI API key for GPT models
-- `ANTHROPIC_API_KEY` - Anthropic API key for Claude models
-- `GOOGLE_API_KEY` - Google API key for Gemini models
-- `MISTRAL_API_KEY` - Mistral API key for Mistral models
-
-> **Security Note**: Never commit `.env.local` to version control. API keys should remain secret and only be used server-side.
-
-## Database Schema
-
-The application uses PostgreSQL via Supabase with the following main tables:
-
-- **models** - AI model configurations (provider, version, costs)
-- **prompts** - Evaluation prompts and templates
-- **runs** - Execution runs linking prompts to outputs
-- **outputs** - Model responses with metrics (latency, tokens, cost)
-- **eval_sets** - Evaluation set definitions
-- **eval_set_prompts** - Many-to-many relationship between eval sets and prompts
-- **evaluation_criteria** - Scoring criteria definitions
-- **ratings** - Individual criterion ratings for outputs
-
-See `schema.sql` for the complete database schema.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## License
-
-[Add your license here]
-
-## Support
-
-For detailed setup instructions, see [SETUP.md](./SETUP.md).
-
+## 🔒 Project Status
+- **Status**: Production-Inspired Portfolio Prototype.
+- **Current Version**: `0.1.0`.
+- **Maintenance**: Maintained as a public engineering portfolio showcase. Safe for deployment.

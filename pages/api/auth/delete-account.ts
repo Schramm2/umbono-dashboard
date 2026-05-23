@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase-server';
 import { setCorsHeaders, handleCorsPreflight } from '../../../lib/cors';
+import { isDemoMode } from '../../../lib/demo-mode';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -21,6 +22,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!auth) return;
 
   try {
+    if (isDemoMode) {
+      return res.status(200).json({
+        message: 'Demo account deletion simulated. No user was removed.',
+        simulated: true,
+      });
+    }
+
     const { password } = req.body;
 
     if (!password) {
@@ -66,4 +74,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
-

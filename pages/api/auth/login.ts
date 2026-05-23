@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { supabaseAdmin } from '../../../lib/supabase-server';
 import { setCorsHeaders, handleCorsPreflight } from '../../../lib/cors';
+import { demoAuthToken, isDemoMode } from '../../../lib/demo-mode';
+import { demoProfile, demoUser } from '../../../lib/demo-data';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -16,6 +18,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    if (isDemoMode) {
+      return res.status(200).json({
+        user: demoUser,
+        profile: demoProfile,
+        session: {
+          access_token: demoAuthToken,
+          refresh_token: 'demo-refresh-token',
+          expires_at: Math.floor(Date.now() / 1000) + 60 * 60 * 24,
+        },
+        message: 'Demo login successful',
+        simulated: true,
+      });
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -60,4 +76,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
-

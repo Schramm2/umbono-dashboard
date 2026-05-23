@@ -6,12 +6,13 @@ import OpenAI from 'openai';
 import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Mistral } from '@mistralai/mistralai';
+import { isDemoMode } from '../../lib/demo-mode';
+import { createDemoRun, demoEvalSets, demoTemplates } from '../../lib/demo-data';
 
-// Initialize clients (ensure API keys are in .env.local)
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
+const genAI = process.env.GOOGLE_API_KEY ? new GoogleGenerativeAI(process.env.GOOGLE_API_KEY) : null;
+const mistral = process.env.MISTRAL_API_KEY ? new Mistral({ apiKey: process.env.MISTRAL_API_KEY }) : null;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -41,6 +42,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // If id is provided, fetch single eval set with prompts (for detail view)
       if (id && typeof id === 'string') {
+        if (isDemoMode) {
+          const evalSet = demoEvalSets.find((item) => item.id === id);
+          if (!evalSet) {
+            res.status(404).json({ message: 'Eval set not found' });
+            return;
+          }
+
+          res.status(200).json({
+            ...evalSet,
+            prompts: demoTemplates.map((template) => ({
+              id: `demo-link-${template.id}`,
+              promptId: template.id,
+              createdAt: template.created_at,
+              prompt: template,
+            })),
+            promptCount: demoTemplates.length,
+          });
+          return;
+        }
+
         const { data: evalSet, error: evalSetError } = await supabase
           .from('eval_sets')
           .select('id, name, description, default_models, default_parameters, created_at, updated_at, archived')
@@ -100,6 +121,11 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       // Otherwise, list all eval sets with prompt counts (user's own sets)
+      if (isDemoMode) {
+        res.status(200).json(demoEvalSets);
+        return;
+      }
+
       const { data: evalSets, error } = await supabase
         .from('eval_sets')
         .select(`
@@ -173,6 +199,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       try {
+        if (isDemoMode) {
+          const originalSet = demoEvalSets.find((set) => set.id === id) || demoEvalSets[0];
+          res.status(201).json({
+            ...originalSet,
+            id: `${originalSet.id}-copy`,
+            name: `${originalSet.name} (Copy)`,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            simulated: true,
+          });
+          return;
+        }
+
         // Fetch the original eval set
         const { data: originalSet, error: fetchError } = await supabase
           .from('eval_sets')
@@ -249,6 +288,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       try {
+        if (isDemoMode) {
+          res.status(200).json({
+            message: 'Demo archive simulated. No eval set was modified.',
+            simulated: true,
+          });
+          return;
+        }
+
         // Check if eval set exists
         const { data: evalSet, error: checkError } = await supabase
           .from('eval_sets')
@@ -295,6 +342,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       try {
+        if (isDemoMode) {
+          res.status(200).json({
+            message: 'Demo unarchive simulated. No eval set was modified.',
+            simulated: true,
+          });
+          return;
+        }
+
         // Check if eval set exists
         const { data: evalSet, error: checkError } = await supabase
           .from('eval_sets')
@@ -345,6 +400,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       try {
+        if (isDemoMode) {
+          const selectedSet = demoEvalSets.find((set) => set.id === id) || demoEvalSets[0];
+          const results = demoTemplates.map((template) => ({
+            prompt_id: template.id,
+            run_id: createDemoRun(template.text, model_ids).run_id,
+            prompt_text: `${template.text.substring(0, 100)}...`,
+            outputs_count: model_ids.length,
+          }));
+
+          res.status(200).json({
+            message: `Demo batch completed for ${results.length} prompts in ${selectedSet.name}`,
+            results,
+            simulated: true,
+          });
+          return;
+        }
+
         // Fetch model details
         const { data: models, error: modelsError } = await supabase
           .from('models')
@@ -460,6 +532,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
                 switch (model.provider) {
                   case 'OpenAI':
+                    if (!openai) throw new Error('OPENAI_API_KEY is not configured.');
                     const openAIParams: any = {
                       model: model.version,
                       messages: [{ role: 'user', content: promptText }],
@@ -475,6 +548,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     break;
 
                   case 'Anthropic':
+                    if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not configured.');
                     // Use streaming for long-running operations (required for operations > 10 minutes)
                     // Anthropic requires temperature to be between 0 and 1
                     const anthropicParams: any = {
@@ -503,6 +577,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     break;
 
                   case 'Google':
+                    if (!genAI) throw new Error('GOOGLE_API_KEY is not configured.');
                     const googleModelName = model.version;
                     const googleModel = genAI.getGenerativeModel({ model: googleModelName });
                     const googleResult = await googleModel.generateContent(promptText);
@@ -514,6 +589,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
                     break;
 
                   case 'Mistral AI':
+                    if (!mistral) throw new Error('MISTRAL_API_KEY is not configured.');
                     const mistralParams: any = {
                       model: model.version,
                       messages: [{ role: 'user', content: promptText }],
@@ -623,6 +699,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       try {
+        if (isDemoMode) {
+          res.status(201).json({
+            id: `demo-link-${Date.now()}`,
+            promptId: prompt_id || `prompt-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            prompt: {
+              id: prompt_id || `prompt-${Date.now()}`,
+              text: prompt_text || demoTemplates[0].text,
+              title: 'Demo Added Prompt',
+              description: 'Simulated prompt membership.',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            simulated: true,
+          });
+          return;
+        }
+
         let actualPromptId = prompt_id;
 
         // If prompt_text is provided but no prompt_id, create a new prompt
@@ -712,6 +806,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+      if (isDemoMode) {
+        res.status(201).json({
+          id: `evalset-demo-${Date.now()}`,
+          name: name.trim(),
+          description: description ? description.trim() : null,
+          promptCount: 0,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          archived: false,
+          simulated: true,
+        });
+        return;
+      }
+
       // Insert new eval set
       const { data: newEvalSet, error } = await supabase
         .from('eval_sets')
@@ -752,6 +860,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const token = authHeader?.replace('Bearer ', '') || authHeader;
     const supabase = createSupabaseClient(token);
     const { action } = req.body;
+
+    if (isDemoMode) {
+      res.status(200).json({
+        message: 'Demo update simulated. No eval set, prompt, model, or parameter rows were modified.',
+        simulated: true,
+      });
+      return;
+    }
 
     // Update eval set (name/description)
     if (!action || action === 'update') {
@@ -985,6 +1101,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const supabase = createSupabaseClient(token);
     const { id, eval_set_id, prompt_id, eval_set_prompt_id } = req.query;
 
+    if (isDemoMode) {
+      res.status(200).json({
+        message: 'Demo delete simulated. No data was removed.',
+        simulated: true,
+      });
+      return;
+    }
+
     // Delete prompt from eval set
     if (eval_set_prompt_id || (eval_set_id && prompt_id)) {
       try {
@@ -1052,4 +1176,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Method not allowed
   res.status(405).json({ message: 'Method not allowed' });
 }
-

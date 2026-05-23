@@ -1,3 +1,13 @@
+/**
+ * @file pages/api/run.ts
+ * @description API route handler for running evaluations across multiple LLM providers.
+ * Supports:
+ * - Parallel execution of OpenAI, Anthropic, Google Gemini, and Mistral completions.
+ * - Capture of latency, token count, cost estimation, and error states.
+ * - Anthropic streaming to safely process long generations and avoid timeout ceilings.
+ * - DEMO_MODE toggle: Bypasses live model provider requests, returning realistic mock outputs.
+ */
+
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createSupabaseClient } from '../../lib/supabase-server';
 import { requireAuth } from '../../lib/auth';
@@ -6,12 +16,13 @@ import { Anthropic } from '@anthropic-ai/sdk';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { Mistral } from '@mistralai/mistralai';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
+import { isDemoMode } from '../../lib/demo-mode';
+import { createDemoRun, demoTemplates } from '../../lib/demo-data';
 
-// Initialize clients (ensure API keys are in .env.local)
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!);
-const mistral = new Mistral({ apiKey: process.env.MISTRAL_API_KEY! });
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const anthropic = process.env.ANTHROPIC_API_KEY ? new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY }) : null;
+const genAI = process.env.GOOGLE_API_KEY ? new GoogleGenerativeAI(process.env.GOOGLE_API_KEY) : null;
+const mistral = process.env.MISTRAL_API_KEY ? new Mistral({ apiKey: process.env.MISTRAL_API_KEY }) : null;
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -33,6 +44,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // List all templates (prompts with titles)
     if (templates === 'true') {
+      if (isDemoMode) {
+        return res.status(200).json(demoTemplates);
+      }
+
       try {
         const { data: templatesList, error: templatesError } = await supabase
           .from('prompts')
@@ -53,6 +68,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Fetch specific template by ID
     if (template_id && typeof template_id === 'string') {
+      if (isDemoMode) {
+        const template = demoTemplates.find((item) => item.id === template_id);
+        if (!template) {
+          return res.status(404).json({ message: 'Template not found' });
+        }
+        return res.status(200).json(template);
+      }
+
       try {
         const { data: template, error: templateError } = await supabase
           .from('prompts')
@@ -75,6 +98,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Fetch run by ID (for sharing functionality)
     if (!id || typeof id !== 'string') {
       return res.status(400).json({ message: 'Run ID, templates=true, or template_id is required' });
+    }
+
+    if (isDemoMode) {
+      return res.status(200).json({
+        id,
+        created_at: new Date().toISOString(),
+        notes: 'Demo run generated without persistence.',
+        prompt: demoTemplates[0],
+        outputs: createDemoRun(demoTemplates[0].text, ['demo-gpt-4o', 'demo-claude-sonnet', 'demo-gemini-flash']).outputs,
+      });
     }
 
     try {
@@ -180,6 +213,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
 
       try {
+        if (isDemoMode) {
+          return res.status(201).json({
+            message: 'Demo template accepted. No database write was performed.',
+            prompt: {
+              id: `template-demo-${Date.now()}`,
+              text: prompt_text.trim(),
+              title: title ? title.trim() : 'Demo Template',
+              description: description ? description.trim() : 'Saved only for this simulated response.',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+            simulated: true,
+          });
+        }
+
         const insertData: any = {
           text: prompt_text.trim(),
         };
@@ -217,6 +265,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     if (!prompt || !model_ids || !Array.isArray(model_ids) || model_ids.length === 0) {
       return res.status(400).json({ message: 'Missing prompt or model IDs.' });
+    }
+
+    if (isDemoMode) {
+      return res.status(200).json({
+        ...createDemoRun(prompt, model_ids),
+        simulated: true,
+      });
     }
 
     try {
@@ -265,6 +320,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         try {
           switch (model.provider) {
             case 'OpenAI':
+              if (!openai) throw new Error('OPENAI_API_KEY is not configured.');
               const openAICompletion = await openai.chat.completions.create({
                 model: model.version,
                 messages: [{ role: 'user', content: prompt }],
@@ -277,6 +333,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               break;
 
               case 'Anthropic':
+              if (!anthropic) throw new Error('ANTHROPIC_API_KEY is not configured.');
               // Use streaming for long-running operations (required for operations > 10 minutes)
               const anthropicStream = await anthropic.messages.stream({
                 model: model.version,
@@ -300,6 +357,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               break;
 
               case 'Google':
+              if (!genAI) throw new Error('GOOGLE_API_KEY is not configured.');
               // Use the model version directly from database
               // Database stores: gemini-flash-latest (exact name as specified)
               // API will use: gemini-flash-latest (no conversion needed)
@@ -319,6 +377,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
               break;
 
               case 'Mistral AI':
+              if (!mistral) throw new Error('MISTRAL_API_KEY is not configured.');
               const mistralCompletion = await mistral.chat.complete({
                 model: model.version,
                 messages: [{ role: 'user', content: prompt }],
@@ -414,4 +473,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   // Method not allowed
   return res.status(405).json({ message: 'Method not allowed' });
 }
-

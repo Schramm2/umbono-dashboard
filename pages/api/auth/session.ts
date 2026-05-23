@@ -1,6 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { getAuthUser, getUserProfile } from '../../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../../lib/cors';
+import { isDemoMode } from '../../../lib/demo-mode';
+import { demoProfile, demoUser } from '../../../lib/demo-data';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -16,6 +18,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    if (isDemoMode) {
+      return res.status(200).json({
+        user: demoUser,
+        profile: demoProfile,
+        authenticated: true,
+        simulated: true,
+      });
+    }
+
     const user = await getAuthUser(req);
 
     if (!user) {
@@ -37,4 +48,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
-

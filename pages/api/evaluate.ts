@@ -1,7 +1,19 @@
+/**
+ * @file pages/api/evaluate.ts
+ * @description API route handler for calculating and saving human evaluation scores.
+ * Features:
+ * - Translates slider scores and boolean parameters (like Ubuntu Alignment) into numeric weights.
+ * - Computes total weighted scores dynamically based on configured evaluation weights.
+ * - Upserts rating records to prevent duplicates and writes computed score results to outputs.
+ * - DEMO_MODE toggle: Calculates scores locally without requiring database writes.
+ */
+
 import { NextApiRequest, NextApiResponse } from 'next';
 import { createSupabaseClient } from '../../lib/supabase-server';
 import { requireAuth } from '../../lib/auth';
 import { setCorsHeaders, handleCorsPreflight } from '../../lib/cors';
+import { isDemoMode } from '../../lib/demo-mode';
+import { scoreDemoRatings } from '../../lib/demo-data';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   // Handle CORS preflight requests
@@ -30,6 +42,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   if (!run_id || !output_id || !userRatings || !Array.isArray(userRatings) || userRatings.length === 0) {
     res.status(400).json({ message: 'Missing required evaluation data.' });
+    return;
+  }
+
+  if (isDemoMode) {
+    const computedScore = scoreDemoRatings(userRatings);
+    res.status(200).json({
+      message: 'Demo evaluation scored locally. No database write was performed.',
+      computed_score: computedScore,
+      score: computedScore,
+      simulated: true,
+    });
     return;
   }
 
@@ -206,4 +229,3 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 }
-

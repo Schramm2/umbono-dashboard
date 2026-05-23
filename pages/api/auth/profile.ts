@@ -2,6 +2,8 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { requireAuth, getUserProfile, requireRole } from '../../../lib/auth';
 import { supabaseAdmin } from '../../../lib/supabase-server';
 import { setCorsHeaders, handleCorsPreflight } from '../../../lib/cors';
+import { isDemoMode } from '../../../lib/demo-mode';
+import { demoProfile, demoUser } from '../../../lib/demo-data';
 
 // Helper function to get user settings
 async function getUserSettings(userId: string) {
@@ -55,6 +57,21 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!auth) return;
 
     try {
+      if (isDemoMode) {
+        return res.status(200).json({
+          profile: demoProfile,
+          settings: {
+            id: 'demo-settings',
+            user_id: demoUser.id,
+            default_temperature: 0.4,
+            default_max_tokens: 1200,
+            default_selected_models: ['demo-gpt-4o', 'demo-claude-sonnet', 'demo-gemini-flash'],
+            show_hints: true,
+          },
+          simulated: true,
+        });
+      }
+
       const profile = await getUserProfile(auth.user.id);
       
       if (!profile) {
@@ -80,6 +97,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     if (!auth) return;
 
     try {
+      if (isDemoMode) {
+        return res.status(200).json({
+          profile: demoProfile,
+          settings: {
+            id: 'demo-settings',
+            user_id: demoUser.id,
+            ...req.body.settings,
+          },
+          message: 'Demo profile update simulated.',
+          simulated: true,
+        });
+      }
+
       const { profile: profileUpdates, settings: settingsUpdates } = req.body;
 
       const result: any = {};

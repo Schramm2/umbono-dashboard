@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "demo": "DEMO_MODE=true NEXT_PUBLIC_DEMO_MODE=true next dev",
     "build": "next build",
+    "build:demo": "DEMO_MODE=true NEXT_PUBLIC_DEMO_MODE=true next build",
     "start": "next start",
     "lint": "next lint"
   },
