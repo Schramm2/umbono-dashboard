@@ -1,11 +1,10 @@
 # =========================================================================
 # Umbono - AI Evaluation Dashboard Makefile
 # =========================================================================
-# Provides convenient shortcut commands for local setup, development,
-# and building the showcase demo or production versions of the dashboard.
+# Provides convenient shortcuts for the deterministic static showcase.
 # =========================================================================
 
-.PHONY: help install dev demo build build-demo lint clean
+.PHONY: help install dev demo build build-demo lint typecheck test verify export-showcase clean
 
 help: ## Show this help message with descriptions of targets
 	@echo "Umbono AI Dashboard Developer Commands:"
@@ -15,20 +14,32 @@ help: ## Show this help message with descriptions of targets
 install: ## Install project dependencies locally
 	npm install
 
-dev: ## Run the local Next.js dev server with production mode database settings
+dev: ## Run the deterministic local showcase
 	npm run dev
 
-demo: ## Run the self-contained portfolio demo (bypasses Supabase & external LLM APIs)
+demo: ## Alias for the deterministic local showcase
 	npm run demo
 
-build: ## Build the Next.js production bundles (requires production env vars)
+build: ## Build the static showcase into out/
 	npm run build
 
-build-demo: ## Build the Next.js portfolio showcase demo bundles
+build-demo: ## Alias for the static showcase build
 	npm run build:demo
 
 lint: ## Run Next.js and ESLint code checks
 	npm run lint
 
+typecheck: ## Verify the canonical TypeScript showcase
+	npm run typecheck
+
+test: ## Run focused scoring and aggregation tests
+	npm test
+
+verify: ## Run tests, type checks, lint, and the static build
+	npm run verify
+
+export-showcase: ## Create a sanitized standalone source tree
+	npm run export:showcase
+
 clean: ## Clean up local build cache and output folders
-	rm -rf .next/ out/ build/
+	rm -rf .next/ out/ build/ .test-dist/

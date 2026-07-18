@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "noEmit": false,
+    "outDir": ".test-dist",
+    "target": "es2020"
+  },
+  "include": ["lib/evaluation.ts", "tests/**/*.ts"],
+  "exclude": ["node_modules"]
+}

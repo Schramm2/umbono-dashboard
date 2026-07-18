@@ -1,6 +1,5 @@
-export const isDemoMode =
-  process.env.DEMO_MODE === 'true' ||
-  process.env.NEXT_PUBLIC_DEMO_MODE === 'true';
+// This repository is a public-safe showcase. Environment configuration cannot
+// enable the historical provider or database paths.
+export const isDemoMode = true as const;
 
 export const demoAuthToken = 'demo-token';
-
