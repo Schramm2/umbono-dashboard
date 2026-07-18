@@ -2,6 +2,8 @@
 
 Umbono is a public-safe portfolio demonstration of a model-evaluation workflow. It lets a visitor open an evaluation set, run several synthetic model profiles in parallel, compare their outputs and operational metadata, apply a human-defined weighted rubric, and see an in-memory leaderboard update.
 
+Frontend changes should follow the product design contract in [DESIGN.md](DESIGN.md).
+
 Everything shown is simulated. Model identities, prompts, outputs, quality scores, latency, token counts, rates, costs, and history are deterministic synthetic fixtures. The project makes no live-provider performance claim.
 
 ## Run locally
