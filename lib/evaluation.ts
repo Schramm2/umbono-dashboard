@@ -15,6 +15,10 @@ export type SyntheticModel = {
   outputCostPerMillion: number
 }
 
+export type ModelIdentity = Pick<SyntheticModel, 'id' | 'name' | 'provider'> & {
+  pricingConfigured?: boolean
+}
+
 export type PromptTemplate = {
   id: string
   title: string
@@ -63,6 +67,7 @@ export type EvaluationRecord = {
   inputTokens: number
   outputTokens: number
   costUsd: number
+  pricingConfigured?: boolean
 }
 
 export type LeaderboardRow = {
@@ -79,6 +84,7 @@ export type LeaderboardRow = {
   costPer1k: number
   totalTokens: number
   runs: number
+  pricingConfigured: boolean
 }
 
 export const criteria: Criterion[] = [
@@ -371,13 +377,16 @@ export function upsertEvaluationRecord(records: EvaluationRecord[], record: Eval
   return [...records.filter((item) => item.id !== record.id), record]
 }
 
-export function aggregateLeaderboard(records: EvaluationRecord[]): LeaderboardRow[] {
+export function aggregateLeaderboard(
+  records: EvaluationRecord[],
+  models: ModelIdentity[] = syntheticModels,
+): LeaderboardRow[] {
   const grouped = new Map<string, EvaluationRecord[]>()
   records.forEach((record) => {
     grouped.set(record.modelId, [...(grouped.get(record.modelId) || []), record])
   })
 
-  const rows = syntheticModels.map((model) => {
+  const rows = models.map((model) => {
     const modelRecords = grouped.get(model.id) || []
     const count = modelRecords.length
     const average = (criterionId: string) => {
@@ -407,6 +416,9 @@ export function aggregateLeaderboard(records: EvaluationRecord[]): LeaderboardRo
       costPer1k: totalTokens ? round((totalCost / totalTokens) * 1_000, 6) : 0,
       totalTokens,
       runs: count,
+      pricingConfigured: count
+        ? modelRecords.every((record) => record.pricingConfigured !== false)
+        : model.pricingConfigured !== false,
     }
   })
 

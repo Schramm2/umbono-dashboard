@@ -113,6 +113,26 @@ test('leaderboard aggregates score, tokens, cost, p95, and deterministic ranking
   assert.equal(cedar?.p95LatencyMs, 200)
   assert.equal(cedar?.totalTokens, 400)
   assert.equal(cedar?.costPer1k, 0.01)
+  assert.equal(cedar?.pricingConfigured, true)
+})
+
+test('leaderboard preserves unavailable pricing instead of presenting zero cost', () => {
+  const rows = aggregateLeaderboard([
+    {
+      id: 'live-1',
+      modelId: 'live-model',
+      score: 4,
+      ratings: { clarity: 4, usefulness: 4, creativity: 4, values_alignment: true },
+      latencyMs: 500,
+      inputTokens: 100,
+      outputTokens: 100,
+      costUsd: 0,
+      pricingConfigured: false,
+    },
+  ], [{ id: 'live-model', name: 'Live Model', provider: 'Provider', pricingConfigured: false }])
+
+  assert.equal(rows[0].costPer1k, 0)
+  assert.equal(rows[0].pricingConfigured, false)
 })
 
 test('synthetic history derives every score from its checked-in ratings', () => {

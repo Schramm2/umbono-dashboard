@@ -8,6 +8,6 @@
     "outDir": ".test-dist",
     "target": "es2020"
   },
-  "include": ["lib/evaluation.ts", "tests/**/*.ts"],
+  "include": ["lib/evaluation.ts", "lib/provider.ts", "tests/**/*.ts"],
   "exclude": ["node_modules"]
 }

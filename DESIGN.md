@@ -1,7 +1,7 @@
 ---
 version: alpha
 name: Umbono
-description: Repo-local design contract for the public-safe model evaluation studio.
+description: Repo-local design contract for the open-source Umbono landing, docs, and evaluation studio.
 colors:
   primary: "#C8F56F"
   on-primary: "#15200D"
@@ -65,20 +65,25 @@ components:
 
 ## Overview
 
-Umbono is an operational product demo, not a marketing dashboard. The interface should feel like a precise evaluation studio: quiet graphite surfaces, one high-visibility action color, clear evidence hierarchy, and enough asymmetry to feel authored without competing with the workflow.
+Umbono is an open-source evaluation product with three distinct surfaces: a public landing page, operator documentation, and an operational studio. The system should feel like a precise lab instrument: quiet graphite surfaces, one high-visibility action color, clear evidence hierarchy, and enough asymmetry to feel authored without competing with the workflow.
 
 ### Evidence Sources
 
-- `pages/index.tsx`: primary product route, interactions, copy, empty state, rubric, and leaderboard.
+- `pages/index.tsx`: public product narrative, ranking visual, workflow, quick start, and open-source conversion path.
+- `pages/studio.tsx`: primary evaluator, demo/live mode switch, output states, rubric, and leaderboard.
+- `pages/docs.tsx`: in-product setup, configuration, deployment, and security guidance.
 - `styles/globals.css`: implementation tokens, responsive layouts, focus treatment, motion, and light-mode mapping.
 - `lib/evaluation.ts`: model profiles, synthetic fixtures, metric names, and scoring behavior.
-- `README.md`: public-safe claims, product scope, and trust boundaries.
+- `lib/provider.ts`: live-provider state, model inventory, pricing availability, and error behavior.
+- `README.md`: open-source positioning, product scope, quick start, and trust boundaries.
 - User direction on 2026-07-18: completely redo the frontend to be clean, modern, professional, and interesting.
+- User direction on 2026-07-19: make the public repository easy to install, understand, evaluate, and use as a portfolio product.
 
 ### Surface Map
 
-- Product introduction: compact value statement plus a live synthetic ranking snapshot. It may use display scale but must keep the main action visible.
-- Evaluation workspace: the primary surface. Utility copy, dense controls, and state clarity take priority over marketing language.
+- Landing page: clear open-source value proposition plus a real data-driven preview. It may use display scale, asymmetric layouts, and restrained entrance motion, but the first viewport must keep one action and one visual dominant.
+- Documentation: readable long-form setup content, sticky local navigation on desktop, code blocks, tables, and direct security language. It follows the landing theme but not its promotional scale.
+- Evaluation workspace: the primary operational surface. Utility copy, dense controls, and state clarity take priority over marketing language.
 - Leaderboard: evidence review surface. Prefer tabular alignment, restrained highlighting, and horizontal overflow on narrow screens.
 - Method and footer: trust boundary and source context. Use the same theme and token family as the product surface.
 
@@ -96,7 +101,7 @@ Use the system display stack for fast static delivery and the mono stack only fo
 
 The maximum content width is 1380px with 20px desktop gutters and 14px mobile gutters. The evaluation workspace is a 360px configuration rail plus a fluid output stage. Below 820px every multi-column surface collapses to a strict single column. Tables may scroll horizontally but controls and primary actions must not.
 
-Use spacing tokens as a rhythm, not a rigid grid. First-screen composition can be asymmetric; operational panels should align tightly and predictably.
+Use spacing tokens as a rhythm, not a rigid grid. Landing compositions may be asymmetric and airy. Documentation uses a narrow reading column. Operational panels align tightly and predictably. Every multi-column composition collapses to a strict single column below 820px.
 
 ## Elevation & Depth
 
@@ -104,7 +109,7 @@ Borders and surface contrast establish most hierarchy. Use one tinted shadow onl
 
 ## Motion
 
-Motion communicates entry hierarchy and state change. The introduction reveals in a short sequence; the live ranking panel follows; output and rubric panels enter when a run completes. Animate only opacity and transform. Hover and active feedback should be tactile but subtle. Disable all nonessential movement under `prefers-reduced-motion`.
+Motion communicates entry hierarchy and state change. The landing introduction reveals in a short sequence; its ranking visual follows; output and rubric panels enter when a run completes. Animate only opacity and transform. Hover and active feedback should be tactile but subtle. Disable all nonessential movement under `prefers-reduced-motion`.
 
 ## Shapes
 
@@ -115,6 +120,7 @@ Controls use 10px corners, internal panels use 14px, and major shells use 18px. 
 - Primary buttons: lime fill, dark text, 46px minimum height, single-line labels, visible hover, active, focus, and disabled states.
 - Inputs: label above control, helper text below, strong surface contrast, and a visible focus ring.
 - Model selector: one divided list, not a card grid. Selection uses the accent fill and a checkmark.
+- Mode selector: one compact segmented control. Demo is always available. Live communicates configured and unavailable states without exposing credentials.
 - Output tabs: horizontally scrollable on small screens, with a 2px active underline and full ARIA tab semantics.
 - Metric group: numeric values lead, labels use mono metadata styling, and there are no filled progress tracks.
 - Empty state: a restrained data-shaped visual plus one direct sentence. Do not duplicate the run action inside it.
@@ -126,19 +132,22 @@ Keyboard focus uses `{colors.focus}` with a 2px outline and 3px offset. Selected
 
 ## Voice & Content
 
-Use concise product language: “Run comparison,” “Update ranking,” and “Choose a test set.” Describe synthetic data plainly and never imply a live benchmark. Avoid decorative technical jargon, poetic labels, fake precision, em dashes, and repetitive trust claims. Numerals are appropriate for metrics and ranks.
+Use concise product language: “Run demo comparison,” “Run live comparison,” “Update ranking,” and “Choose a test set.” Describe synthetic data plainly and distinguish it from live provider output at every relevant state. Live-mode copy must mention possible provider usage cost before a request. Avoid decorative technical jargon, poetic labels, fake precision, em dashes, and repetitive trust claims. Numerals are appropriate for metrics and ranks.
 
 ## Do's and Don'ts
 
 - Do make the working comparison the dominant product surface.
 - Do use one accent consistently for action and state.
-- Do preserve the no-network, no-credential, session-only trust boundary.
+- Do preserve the zero-credential demo and server-only live-key boundary.
+- Do keep live model selection bounded to the configured allowlist.
 - Do verify both system color modes and mobile collapse behavior.
 - Do not return to equal-card dashboard mosaics.
 - Do not place marketing hero scale inside the evaluator.
 - Do not add external fonts, icon libraries, images, or runtime dependencies without a product need.
+- Do not let landing-page scale or promotional copy leak into the studio or docs.
 - Do not use gradients as a substitute for a real product visual.
 
 ## Open Questions
 
-- A formal Umbono wordmark or brand font has not been provided. The geometric “U” mark and system type are the current public-safe defaults.
+- A formal Umbono wordmark or brand font has not been provided. The geometric “U” mark and system type are the current open-source defaults.
+- A hosted public URL and social preview image have not been selected.

@@ -1,12 +1,22 @@
 {
   "name": "umbono",
-  "version": "0.1.0",
+  "version": "0.2.0",
+  "description": "An open-source studio for reproducible multi-model AI evaluations and human-scored comparisons.",
   "private": true,
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Schramm2/umbono-dashboard.git"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
   "scripts": {
+    "setup": "node scripts/setup.mjs",
     "dev": "next dev --webpack",
-    "demo": "next dev --webpack",
+    "demo": "UMBONO_FORCE_DEMO=true next dev --webpack",
+    "start": "next start",
     "build": "next build --webpack",
-    "build:demo": "next build --webpack",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "tsc -p tsconfig.tests.json && node --test .test-dist/tests/*.test.js",
