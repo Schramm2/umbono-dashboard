@@ -32,6 +32,7 @@
     "next-env.d.ts",
     "pages/**/*.tsx",
     "lib/evaluation.ts",
+    "lib/provider.ts",
     ".next/types/**/*.ts"
   ],
   "exclude": [

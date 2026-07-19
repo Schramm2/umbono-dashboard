@@ -1,6 +1,6 @@
 # Umbono calculation contract
 
-Every value in this showcase is synthetic. These definitions make the simulated behavior independently reproducible without implying live model-provider performance.
+The checked-in demo history is synthetic. Live mode uses provider-reported token usage and measured request duration. These definitions keep both modes explicit and independently reviewable.
 
 ## Weighted score
 
@@ -10,9 +10,9 @@ Current rubric:
 
 | Criterion | Input | Weight |
 |---|---:|---:|
-| Clarity | 1–5 | 30% |
-| Usefulness | 1–5 | 35% |
-| Creativity | 1–5 | 15% |
+| Clarity | 1-5 | 30% |
+| Usefulness | 1-5 | 35% |
+| Creativity | 1-5 | 15% |
 | Values alignment | false / true | 20% |
 
 All checked-in history scores are calculated from their ratings by `calculateWeightedScore`; no aggregate uses an independently typed score.
@@ -32,7 +32,7 @@ Illustrative cost is:
 + (output tokens / 1,000,000 × synthetic output rate)
 ```
 
-Cost per 1k tokens is total illustrative cost divided by total tokens, multiplied by 1,000. Rates are invented for this showcase and are not provider prices.
+Cost per 1k tokens is total cost divided by total tokens, multiplied by 1,000. Demo rates are synthetic. Live cost appears only when the operator explicitly configures input and output rates for the exact model ID.
 
 ## Ranking
 
@@ -45,7 +45,7 @@ Rows sort by:
 ## Proof points
 
 1. `runParallelSimulation` uses `Promise.all` over independently selected synthetic profiles and returns identical results for identical inputs.
-2. `calculateWeightedScore` rejects missing, unknown, incorrectly typed, and out-of-range ratings, then normalizes valid ratings onto a 0–5 scale.
+2. `calculateWeightedScore` rejects missing, unknown, incorrectly typed, and out-of-range ratings, then normalizes valid ratings onto a 0-5 scale.
 3. `aggregateLeaderboard`, `nearestRankPercentile`, and `calculateCost` reproduce score averages, alignment rate, p95, token totals, cost per 1k, and ranking from checked-in records.
 
 Run `npm test` to verify these behaviors and their edge cases.
